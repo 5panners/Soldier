@@ -118,10 +118,10 @@ export const GAITS = {
     hips: (p) => ({
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
       // a touch of 1st harmonic keeps left/right steps from being mirror-perfect
-      pos: V3(-0.020 * Math.cos(TAU * (p - 0.30)),
+      pos: V3(-0.011 * Math.cos(TAU * (p - 0.30)),
         0.905 + 0.019 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
         -0.009 * Math.cos(2 * TAU * (p - 0.30))),
-      yaw: deg(-4) + deg(5.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(4) * Math.cos(TAU * (p - 0.24)),
+      yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
       pitch: deg(6) + deg(1.6) * Math.cos(2 * TAU * (p - 0.08)),
     }),
     lag: { freq: 3.6, zeta: 0.42, gain: 0.6 },
@@ -133,7 +133,7 @@ export const GAITS = {
     swingInset: 0.008, landVy: 0.55, pitchEase: 2.0, swingPitchBias: deg(-8), swingToe: deg(4),
     hips: (p) => ({
       pos: V3(-0.010 * Math.cos(TAU * (p - 0.17)), 0.905 - 0.032 * Math.cos(2 * TAU * (p - 0.17)), -0.012 * Math.cos(2 * TAU * (p - 0.17))),
-      yaw: deg(-5) + deg(7) * Math.cos(TAU * p), roll: -deg(4) * Math.cos(TAU * (p - 0.17)),
+      yaw: deg(-5) + deg(5) * Math.cos(TAU * p), roll: -deg(2.5) * Math.cos(TAU * (p - 0.17)),
       pitch: deg(10) + deg(2) * Math.cos(2 * TAU * (p - 0.2)),
     }),
     lag: { freq: 4.8, zeta: 0.45, gain: 0.45 },
@@ -143,8 +143,8 @@ export const GAITS = {
     hsPitch: deg(12), toePitch: deg(28), heelRisePow: 1.6, lift: 0.06, liftSkew: 0.8, kickBack: -0.02,
     swingInset: 0.01, landVy: 0.1, pitchEase: 2.4, swingToe: deg(4),
     hips: (p) => ({
-      pos: V3(-0.012 * Math.cos(TAU * (p - 0.30)), 0.875 + 0.006 * Math.cos(2 * TAU * (p - 0.32)), -0.004 * Math.cos(2 * TAU * (p - 0.3))),
-      yaw: deg(-16) + deg(4) * Math.cos(TAU * p), roll: -deg(2.5) * Math.cos(TAU * (p - 0.25)),
+      pos: V3(-0.008 * Math.cos(TAU * (p - 0.30)), 0.875 + 0.006 * Math.cos(2 * TAU * (p - 0.32)), -0.004 * Math.cos(2 * TAU * (p - 0.3))),
+      yaw: deg(-16) + deg(3) * Math.cos(TAU * p), roll: -deg(1.5) * Math.cos(TAU * (p - 0.25)),
       pitch: deg(9) + deg(0.8) * Math.cos(2 * TAU * (p - 0.1)),
     }),
     lag: { freq: 5.5, zeta: 0.7, gain: 0.12 },
@@ -154,8 +154,8 @@ export const GAITS = {
     hsPitch: deg(10), toePitch: deg(32), heelRisePow: 1.5, lift: 0.08, liftSkew: 0.7, kickBack: -0.02,
     swingInset: 0.015, landVy: 0.12, pitchEase: 2.2, swingToe: deg(5),
     hips: (p) => ({
-      pos: V3(-0.022 * Math.cos(TAU * (p - 0.30)), 0.64 + 0.014 * Math.cos(2 * TAU * (p - 0.31)), -0.01 - 0.008 * Math.cos(2 * TAU * (p - 0.3))),
-      yaw: deg(-10) + deg(6) * Math.cos(TAU * p), roll: -deg(4.5) * Math.cos(TAU * (p - 0.24)),
+      pos: V3(-0.013 * Math.cos(TAU * (p - 0.30)), 0.64 + 0.014 * Math.cos(2 * TAU * (p - 0.31)), -0.01 - 0.008 * Math.cos(2 * TAU * (p - 0.3))),
+      yaw: deg(-10) + deg(4) * Math.cos(TAU * p), roll: -deg(2.2) * Math.cos(TAU * (p - 0.24)),
       pitch: deg(24) + deg(1.5) * Math.cos(2 * TAU * (p - 0.1)),
     }),
     lag: { freq: 3.8, zeta: 0.5, gain: 0.45 },
@@ -534,79 +534,66 @@ function keyClip(name, keys, meta = {}) {
 
 // ------------------------------------------------------------------ crawl
 /**
- * High crawl (FM 3-21.75): body off the ground, weight on the forearms and lower legs,
- * rifle cradled in the arms with the muzzle off the ground. Right elbow advances with the
- * left knee, then left elbow with right knee. Forearms and shins are planted contacts that
- * move backward at exactly the crawl speed (in place), so nothing slides.
+ * Belly crawl ("leopard / commando crawl", the low crawl family in FM 3-21.75): the torso
+ * stays flat on the ground. The right forearm reaches forward and plants as the left knee is
+ * drawn up sideways along the ground; then the body is pulled and pushed forward over them
+ * and the other pair goes. Forearms and the inner side of each knee/foot are planted contacts
+ * that move backward at exactly the crawl speed (in place), so nothing slides. The rifle
+ * lies cradled across both forearms, muzzle to the left and off the ground.
  */
 function crawlClip(PR) {
-  const T = 1.6, v = 0.22, L = v * T, PL = 0.7;
+  const T = 1.8, v = 0.20, L = v * T, PL = 0.62;
   const N = Math.round(T * FPS);
-  const limb = (phase, x, z0, y0, lift) => (p) => {
+  // contact path: planted (moving back at ground speed), then a forward reach along the ground
+  const contact = (phase) => (p) => {
     p = ((p - phase) % 1 + 1) % 1;
-    if (p < PL) return { pos: V3(x, y0, z0 - L * p), planted: true };
-    const u = (p - PL) / (1 - PL);
-    return { pos: V3(x, y0 + lift * Math.pow(Math.sin(Math.PI * u), 1.2), lerp(z0 - L * PL, z0, smoother(u))), planted: false };
+    if (p < PL) return { u: p / PL, planted: true, z: -L * p };
+    const w = (p - PL) / (1 - PL);
+    return { u: 1 - smoother(w), planted: false, z: lerp(-L * PL, 0, smoother(w)), w };
   };
-  const elbowR = limb(0.0, -0.20, 0.14, 0.045, 0.07), elbowL = limb(0.5, 0.20, 0.14, 0.045, 0.07);
-  const ankleL = limb(0.02, 0.17, -0.97, 0.075, 0.09), ankleR = limb(0.52, -0.17, -0.97, 0.075, 0.09);
-  const shoeQ = footBasis(V3(0, -0.3, -1), V3(0, -1, 0.3));
-  const base = derive(PR, {
-    clavicle: { Left: clav('Left', 8, 28), Right: clav('Right', 8, 12) },
-  });
+  const cRE = contact(0.0), cLE = contact(0.5), cLK = contact(0.0), cRK = contact(0.5);
+  const base = derive(PR, { clavicle: { Left: clav('Left', 6, 24), Right: clav('Right', 6, 10) } });
   const frames = [];
-  const kneeH = (hipsPos, hipsQ, s, ankle, pole) => {
-    const j = BIND_LOCAL[`${s}UpLeg`].clone().applyQuaternion(hipsQ).add(hipsPos);
-    const d = j.distanceTo(ankle), l1 = LEG_UPPER, l2 = LEG_LOWER;
-    if (d >= l1 + l2) return j.y + (ankle.y - j.y) * (l1 / (l1 + l2));
-    const dn = ankle.clone().sub(j).normalize();
-    const a = (l1 * l1 + d * d - l2 * l2) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
-    const pp = pole.clone().addScaledVector(dn, -pole.dot(dn)).normalize();
-    return j.y + dn.y * a + pp.y * h;
-  };
   for (let n = 0; n <= N; n++) {
     const p = (n % N) / N;
-    const ER = elbowR(p), EL = elbowL(p), AL = ankleL(p), AR = ankleR(p);
-    const hipsQ = qEuler(deg(84), deg(6) * Math.sin(TAU * p), deg(5) * Math.sin(TAU * (p - 0.1)));
-    const kneePole = { Left: V3(0.25, -1, 0.15).normalize(), Right: V3(-0.25, -1, 0.15).normalize() };
-    // pelvis height: planted shins keep their knees on the ground (~6.5 cm); a swinging
-    // knee must clear it. Knee height falls monotonically as the pelvis lowers.
-    const hx = 0.0, hz = -0.56 + 0.02 * Math.cos(2 * TAU * p);
-    const solveY = (s, ankle, target) => {
-      let lo = 0.10, hi = 0.60;
-      for (let it = 0; it < 30; it++) {
-        const y = (lo + hi) / 2;
-        if (kneeH(V3(hx, y, hz), hipsQ, s, ankle, kneePole[s]) > target) hi = y; else lo = y;
-      }
-      return (lo + hi) / 2;
+    const RE = cRE(p), LE = cLE(p), LK = cLK(p), RK = cRK(p);
+    // forearms: planted from 0.16 (reach) back to 0.16 - L*PL; lifted only a little on the reach
+    const elbow = (c, s) => V3(0.25 * s, 0.045 + (c.planted ? 0 : 0.05 * Math.sin(Math.PI * c.w)), 0.16 + c.z);
+    const ER = elbow(RE, -1), EL = elbow(LE, 1);
+    // legs: at the start of its plant a leg is drawn up with the knee out to the side; it
+    // straightens back as the body slides forward over it
+    const leg = (c, s) => {
+      // 1 = drawn up, 0 = straight; the knee stays drawn up at the start of the push, then
+      // the leg extends; boots drag along the ground as they do in a real belly crawl
+      const bent = c.planted ? 1 - smooth(c.u) : smoother(c.w);
+      const pos = V3(s * lerp(0.13, 0.36, bent), 0.07, lerp(-1.32, -0.92, bent));
+      const toe = V3(s * 0.25, -0.25, -1), top = V3(s, 0.35, 0.1);
+      return { pos, quat: footBasis(toe, top), toe: deg(10), bent };
     };
-    const yL = solveY('Left', AL.pos, AL.planted ? 0.065 : 0.085);
-    const yR = solveY('Right', AR.pos, AR.planted ? 0.065 : 0.085);
-    const hy = Math.max(yL, yR);
-    // chest pitch chosen so the shoulders sit one upper-arm length above the planted forearms
-    let cLo = deg(80), cHi = deg(120), chestQ = null;
-    for (let it = 0; it < 18; it++) {
+    const FL = leg(LK, 1), FR = leg(RK, -1);
+    const draw = FL.bent - FR.bent; // + = left knee drawn up
+    const hipsQ = qEuler(deg(88), deg(5) * draw, deg(7) * draw);
+    const hp = V3(0.0, 0.125 + 0.008 * Math.abs(draw), -0.52);
+    const kneePole = { Left: V3(1, -0.45, 0.3).normalize(), Right: V3(-1, -0.45, 0.3).normalize() };
+    // chest only slightly raised on the forearms (shoulders ~21 cm up)
+    let cLo = deg(70), cHi = deg(100), chestQ = null;
+    for (let it = 0; it < 16; it++) {
       const cp = (cLo + cHi) / 2;
-      chestQ = qEuler(cp, -deg(4) * Math.sin(TAU * p), -deg(7) * Math.sin(TAU * (p - 0.05)));
-      const r = crawlSolver.solve(specFrom(derive(base, { hipsPos: V3(hx, hy, hz), hipsQ, chestQ }), { headWorld: qEuler(deg(22), 0, 0) }));
+      chestQ = qEuler(cp, -deg(4) * draw, -deg(5) * draw);
+      const r = crawlSolver.solve(specFrom(derive(base, { hipsPos: hp, hipsQ, chestQ }), { headWorld: qEuler(deg(6), 0, 0) }));
       const sh = (r.world.LeftArm.pos.y + r.world.RightArm.pos.y) / 2;
-      if (sh > 0.33) cLo = cp; else cHi = cp;
+      if (sh > 0.21) cLo = cp; else cHi = cp;
     }
-    const st = derive(base, { hipsPos: V3(hx, hy, hz), hipsQ, chestQ });
-    const feet = {
-      Left: { pos: AL.pos, quat: shoeQ.clone(), toe: deg(15) },
-      Right: { pos: AR.pos, quat: shoeQ.clone(), toe: deg(15) },
-    };
-    const spec = specFrom(st, { feet, kneePole, headWorld: qEuler(deg(22), 0, 0), trigger: 0 });
-    // rifle cradled across both forearms (roughly parallel to the shoulders, muzzle to the
-    // left, lying on its side so the magazine clears the ground); it swings with the elbows
-    const dR = V3(0.22, 0.12, 0.97).normalize(), dL = V3(-0.22, 0.12, 0.97).normalize();
-    const hR = ER.pos.clone().addScaledVector(dR, 0.255), hL = EL.pos.clone().addScaledVector(dL, 0.255);
+    const st = derive(base, { hipsPos: hp, hipsQ, chestQ });
+    const feet = { Left: FL, Right: FR };
+    const spec = specFrom(st, { feet, kneePole, headWorld: qEuler(deg(6), deg(-3) * draw, 0), trigger: 0 });
+    const dR = V3(0.30, 0.06, 0.95).normalize(), dL = V3(-0.30, 0.06, 0.95).normalize();
+    const hR = ER.clone().addScaledVector(dR, 0.255), hL = EL.clone().addScaledVector(dL, 0.255);
     const across = hL.clone().sub(hR);
     const yaw = deg(80) + 0.3 * (Math.atan2(across.x, across.z) - deg(90));
-    const wq = qEuler(deg(4), yaw, deg(-75));
+    const wq = qEuler(deg(2), yaw, deg(-80));
     spec.cradle = {
-      elbow: { Left: EL.pos, Right: ER.pos },
+      elbow: { Left: EL, Right: ER },
       rightHand: { pos: hR, quat: wq.clone().multiply(GRIPS.right.quat) },
       leftGrip: (z) => leftGrip(z, 'cup'),
     };
@@ -627,7 +614,7 @@ export function buildClipLibrary() {
 
   // Walking with the rifle at the low ready, upper body stabilised
   clips.push(locomotion('Walk', GAITS.walk, lively(LR, {
-    pitch: 9, yaw: -12, roll: 1, pelvisYaw0: -4, counter: 0.45, pitchAmp: 1.1, rollAmp: 1.4, clavAmp: 1.6, headPitch: 6, headAmp: 1.3,
+    pitch: 9, yaw: -12, roll: 1, pelvisYaw0: -4, counter: 0.45, pitchAmp: 1.1, rollAmp: 0.7, clavAmp: 1.6, headPitch: 6, headAmp: 1.3,
   })));
 
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
@@ -669,7 +656,7 @@ export function buildClipLibrary() {
   const CR = STANCES.crouch, CRA = STANCES.crouchAds, PR = STANCES.prone;
   clips.push(standingLoop('Crouch_Idle', CR, 4.0, idleLike(CR, { breath: 1, sway: 0.6, look: true })));
   clips.push(locomotion('Crouch_Walk', GAITS.crouchWalk, lively(derive(CR, { feet: undefined }), {
-    pitch: 24, yaw: -11, roll: 1, pelvisYaw0: -10, counter: 0.45, pitchAmp: 1.2, rollAmp: 1.5, clavAmp: 1.5, headPitch: 2, headAmp: 1.2,
+    pitch: 24, yaw: -11, roll: 1, pelvisYaw0: -10, counter: 0.45, pitchAmp: 1.2, rollAmp: 0.8, clavAmp: 1.5, headPitch: 2, headAmp: 1.2,
   })));
   clips.push(standingLoop('Crouch_ADS_Idle', CRA, 4.0, idleLike(CRA, { breath: 0.3, sway: 0.2 })));
   clips.push(locomotion('Crouch_ADS_Walk', GAITS.crouchWalk, () => ({ st: derive(CRA, { feet: undefined }) })));

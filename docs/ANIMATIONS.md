@@ -17,14 +17,14 @@ Vertical motion (gait bob, jump arc) is baked into `Hips.position`.
 | Clip | Length | Loop | Speed | Notes |
 |---|---|---|---|---|
 | `Idle` | 4.00 s | ✓ | — | Low ready: butt in the shoulder pocket, muzzle about 30° down, index finger straight along the receiver. 15 breaths/min (chest pitch and clavicle lift), slow weight shift, and a head scan to the left and back. |
-| `Walk` | 1.10 s | ✓ | 1.25 m/s | Patrol walk at the low ready, 109 steps/min, 0.69 m step. Stance is 62 % of the cycle. Heel strike with 16° dorsiflexion, heel-off at 40 %, toe-off with 38° heel rise and toe bend. Soft knees through stance. Pelvis yaw ±5.5°, obliquity ±4°, sway ±2 cm, bob ±1.9 cm. The thorax counter-rotates and leans into the weight transfer, the shoulders bounce after each footfall, the head nods and settles, and the rifle lags vertically and sideways. |
+| `Walk` | 1.10 s | ✓ | 1.25 m/s | Patrol walk at the low ready, 109 steps/min, 0.69 m step. Stance is 62 % of the cycle. Heel strike with 16° dorsiflexion, heel-off at 40 %, toe-off with 38° heel rise and toe bend. Soft knees through stance. Restrained pelvis: yaw ±3.5°, obliquity ±1.8°, sway ±1.1 cm, bob ±1.9 cm. The thorax counter-rotates and leans into the weight transfer, the shoulders bounce after each footfall, the head nods and settles, and the rifle lags vertically and sideways. |
 | `Run` | 0.68 s | ✓ | 3.2 m/s | 176 steps/min. Stance is 34 %, with two flight phases. Midfoot contact, high heel kick and about 6.4 cm vertical oscillation. 15° trunk lean and thorax counter-rotation. The rifle is carried compact across the chest, muzzle down-left. |
 | `ADS_Walk` | 1.20 s | ✓ | 0.9 m/s | Aiming "Groucho" walk: knees bent, smooth rolling heel-to-toe, chest world-locked. Cheek weld kept: the eye stays within 1 mm of the sight line. |
 | `HipFire_Walk` | 1.20 s | ✓ | 0.9 m/s | The same rolling gait with the stock clamped under the right arm. |
 
 | `Crouch_Walk` | 1.24 s | ✓ | 0.85 m/s | Low crouched advance: pelvis at about 0.64 m, 24° trunk lean, wide base, rolling heel-to-toe, rifle at the low ready. |
 | `Crouch_ADS_Walk` | 1.24 s | ✓ | 0.85 m/s | The same crouched gait while aiming. The chest is world-locked and the cheek weld kept (eye within 2 mm). |
-| `Prone_Crawl` | 1.60 s | ✓ | 0.22 m/s | High crawl on the forearms and lower legs. Contralateral limbs move together (right elbow with left knee). Each forearm and shin is planted for 70 % of the cycle. The rifle is cradled across both forearms with the muzzle off the ground; the pelvis rocks and rolls with each knee. |
+| `Prone_Crawl` | 1.80 s | ✓ | 0.20 m/s | Belly crawl with the torso flat on the ground. The right forearm reaches and plants as the left knee is drawn up sideways along the ground, then the body is pulled and pushed forward over them and the other pair goes. Forearms are planted for 62 % of the cycle and boots drag. The rifle is cradled across both forearms with the muzzle off the ground. |
 
 ## Weapon stances and firing
 

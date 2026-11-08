@@ -292,9 +292,9 @@
     "events": {}
   },
   "Prone_Crawl": {
-    "duration": 1.6,
+    "duration": 1.8,
     "loop": true,
-    "inPlaceSpeed": 0.22,
+    "inPlaceSpeed": 0.2,
     "shots": [],
     "events": {}
   },

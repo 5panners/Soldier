@@ -25,7 +25,7 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 | Firing | `ADS_Fire`, `ADS_Fire_Auto` (700 RPM loop), `HipFire_Fire`, `HipFire_Fire_Auto` |
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
 | Crouch | `Crouch_Idle`, `Crouch_Walk` 0.85 m/s, `Crouch_ADS_Idle`, `Crouch_ADS_Walk`, `Crouch_ADS_Fire`, `Crouch_ADS_Fire_Auto`, `Stand_To_Crouch`, `Crouch_To_Stand`, `Crouch_To_Crouch_ADS`, `Crouch_ADS_To_Crouch` |
-| Prone | `Prone_Idle` (aiming), `Prone_Fire`, `Prone_Fire_Auto`, `Prone_Crawl` 0.22 m/s (high crawl), `Stand_To_Prone`, `Prone_To_Stand` |
+| Prone | `Prone_Idle` (aiming), `Prone_Fire`, `Prone_Fire_Auto`, `Prone_Crawl` 0.20 m/s (belly crawl), `Stand_To_Prone`, `Prone_To_Stand` |
 | Jump | `Jump` (full), `Jump_Start`, `Jump_Air` (loop), `Jump_Land` |
 | Static poses | `Idle_Pose`, `ADS_Pose`, `HipFire_Pose`, `Crouch_Pose`, `Crouch_ADS_Pose`, `Prone_Pose` (aim-offset / additive references) |
 
@@ -72,7 +72,8 @@ The clips are not hand-keyed curves. Each frame is a high-level pose (pelvis, ch
    * The shoulders bounce just after each footfall, and the head nods and settles.
    * The rifle lags vertically and sideways on damped springs.
    * Knees stay soft through stance, and the left and right steps aren't mirror-perfect.
-8. **Crawl and prone.** The high crawl plants each forearm and shin as a ground contact that moves backward at the crawl speed. The right elbow advances with the left knee, then the left elbow with the right knee. Pelvis height and chest pitch are solved each frame so the planted knees and elbows touch the ground, and the rifle stays cradled across both forearms. Getting down to prone and back up is a multi-key motion: crouch → both knees → onto the forearms → legs back → aim. It interpolates smoothly through every key.
+   * Hip sway and tilt are kept small for a squared-off, loaded-soldier gait.
+8. **Crawl and prone.** The crawl keeps the belly on the ground. Each forearm plants as a ground contact that moves backward at the crawl speed, and the opposite knee is drawn up sideways along the ground, then straightens as the body slides over it. Chest pitch is solved each frame so the forearms reach the ground, and the rifle stays cradled across both forearms. Getting down to prone and back up is a multi-key motion: crouch → both knees → onto the forearms → legs back → aim. It interpolates smoothly through every key.
 9. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.5 s airtime, about 0.3 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
 
 The biomechanics and marksmanship references behind the numbers are listed in [docs/REFERENCES.md](docs/REFERENCES.md).
@@ -104,7 +105,7 @@ This re-bakes headlessly, writes `exports/soldier.glb` and `exports/animations.j
 | **Blender** | File → Import → glTF 2.0. The clips appear as Actions. |
 
 Tips:
-* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 3.2, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.22 m/s) so the feet stay locked to the ground.
+* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 3.2, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.20 m/s) so the feet stay locked to the ground.
 * **Weapon socket.** The rifle hangs off `Weapon_R`. To swap guns, attach your own weapon to that bone. The grip origin is the weapon origin, +Z is the muzzle and +Y is up.
 * **Support hand.** Use the `LeftHand_IK` node with your engine's two-bone IK to keep the left hand on the handguard when blending or layering.
 * **Recoil layering.** Use `ADS_Pose` / `HipFire_Pose` as the reference pose when you make the fire clips additive, then layer them over walking. The simulator does exactly this.

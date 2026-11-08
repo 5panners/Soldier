@@ -39,8 +39,9 @@ The animations are procedurally authored, not motion captured. Their timing, joi
 * Prone firing position follows FM 3-22.9 (linked above):
   * The body is angled to the left of the line of fire, with the firing-side knee drawn up.
   * The elbows support the rifle, and the butt sits in the shoulder pocket.
-* High crawl follows the individual movement techniques in FM 3-21.75 *The Warrior Ethos and Soldier Combat Skills*:
-  * The body is off the ground, with the weight on the forearms and lower legs.
-  * The rifle is cradled in the arms with the muzzle off the ground.
-  * The right elbow and left knee advance together, then the other pair.
+* The crawl follows the low-crawl family of individual movement techniques in FM 3-21.75 *The Warrior Ethos and Soldier Combat Skills*:
+  * The body stays flat on the ground.
+  * The soldier pulls with the arms and pushes with a drawn-up leg.
+  * The muzzle is kept off the ground.
+  * Here it is alternating: the right forearm with the left knee, then the other pair.
 * Used in `buildProne()` (`src/motion.js`) and `crawlClip()` (`src/clips.js`).
