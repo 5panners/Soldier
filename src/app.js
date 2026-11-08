@@ -369,7 +369,7 @@ function setBase(name, fade = 0.25, timeScale = 1) {
 window.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (mode !== 'play') return;
-  if (['Space', 'Enter'].includes(e.code)) e.preventDefault(); // don't trigger focused UI buttons
+  if (['Space', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault(); // no UI buttons / page scroll
   if (e.repeat) return;
   if (e.code === 'Space' && !sim.jumping && (sim.posture || 'stand') === 'stand' && !sim.postureClip) startJump();
   if (e.code === 'KeyV') sim.eye = !sim.eye;
@@ -417,6 +417,11 @@ const POSTURE_T = {
   'crouch>prone': 'Stand_To_Prone', 'prone>crouch': 'Prone_To_Stand',
 };
 function updatePlay(dt) {
+  // arrow keys orbit the camera (same as moving the mouse): left/right turn, up/down tilt
+  const orbitX = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+  const orbitY = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
+  if (orbitX) sim.camYaw -= orbitX * 2.2 * dt;
+  if (orbitY) sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + orbitY * 1.1 * dt, -0.3, 0.6);
   // desired movement in camera frame
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   const r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
