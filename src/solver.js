@@ -239,6 +239,11 @@ export class PoseSolver {
       let handT = null;
       if (weapon && spec.grips && spec.grips[s] && !(s === 'Left' && spec.leftOff)) handT = gripTarget(s, spec.grips[s]);
       else if (spec.freeHand && spec.freeHand[s]) handT = spec.freeHand[s](W, weapon);
+      if (spec.handBlend && spec.handBlend[s] && handT && spec.freeHand && spec.freeHand[s]) {
+        // blend between the grip and a free-hand target (e.g. a hand planted on a wall)
+        const alt = spec.freeHand[s](W, weapon), t = spec.handBlend[s];
+        handT = { pos: handT.pos.clone().lerp(alt.pos, t), quat: handT.quat.clone().slerp(alt.quat, t) };
+      }
       solveArm(s, handT, spec.elbowTarget && spec.elbowTarget[s]);
     }
 

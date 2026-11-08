@@ -10,6 +10,8 @@ export function clipMetadata(baked) {
     inPlaceSpeed: +(b.def.speed || 0).toFixed(3),
     shots: (b.def.shots || []).map((t) => +t.toFixed(4)),
     events: b.def.events || {},
+    ...(b.def.rootMotion ? { rootMotion: b.def.rootMotion } : {}),
+    ...(b.def.obstacle ? { obstacle: b.def.obstacle } : {}),
   }]));
 }
 

@@ -93,6 +93,27 @@ const props = new THREE.Group();
 }
 scene.add(props);
 
+// low walls to vault in play mode (1.0 m high, 25 cm thick, as authored in the Vault clip)
+const WALLS = [];
+{
+  const mat = new THREE.MeshStandardMaterial({ color: '#8a8478', flatShading: true, roughness: 0.95 });
+  const cap = new THREE.MeshStandardMaterial({ color: '#a39d90', flatShading: true });
+  for (const [x, z, yaw, w] of [[0, 7, 0, 2.6], [-5, 13, 0.35, 3.0], [6, 4, -0.7, 2.4], [2, 16, 0.1, 3.2], [-7, 3, 1.2, 2.4]]) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, 0.96, 0.25), mat); body.position.y = 0.48;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(w + 0.04, 0.04, 0.29), cap); top.position.y = 0.98;
+    g.add(body, top); g.position.set(x, 0, z); g.rotation.y = yaw;
+    g.traverse((o) => { o.castShadow = o.receiveShadow = true; });
+    props.add(g);
+    WALLS.push({ g, x, z, yaw, half: w / 2 });
+  }
+}
+// the wall shown in the viewer while the Vault clip plays
+const viewerWall = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 0.25), new THREE.MeshStandardMaterial({ color: '#8a8478', flatShading: true }));
+viewerWall.castShadow = viewerWall.receiveShadow = true;
+viewerWall.visible = false;
+scene.add(viewerWall);
+
 // ------------------------------------------------------------------ soldier
 const S = buildSoldier();
 scene.add(S.group);
@@ -308,7 +329,7 @@ const GROUPS = [
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
   ['Prone', ['Prone_Idle', 'Prone_Fire', 'Prone_Fire_Auto', 'Prone_Crawl', 'Stand_To_Prone', 'Prone_To_Stand']],
-  ['Jump', ['Jump', 'Jump_Start', 'Jump_Air', 'Jump_Land']],
+  ['Jump & vault', ['Jump', 'Jump_Start', 'Jump_Air', 'Jump_Land', 'Vault']],
   ['Poses', ['Idle_Pose', 'ADS_Pose', 'HipFire_Pose', 'Crouch_Pose', 'Crouch_ADS_Pose', 'Prone_Pose']],
 ];
 
@@ -378,8 +399,9 @@ function setMode(m) {
   $('#modeview').classList.toggle('on', m === 'view');
   controls.enabled = m === 'view';
   if (m === 'play') {
-    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
+    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
     sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null;
+    viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
     groundScroll = 0; gtex.offset.set(0, 0);
@@ -410,7 +432,10 @@ window.addEventListener('keydown', (e) => {
   if (mode !== 'play') return;
   if (['Space', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault(); // no UI buttons / page scroll
   if (e.repeat) return;
-  if (e.code === 'Space' && !sim.jumping && (sim.posture || 'stand') === 'stand' && !sim.postureClip) startJump();
+  if (e.code === 'Space' && !sim.jumping && !sim.vault && (sim.posture || 'stand') === 'stand' && !sim.postureClip) {
+    const v = vaultableWall();
+    if (v) startVault(v); else startJump();
+  }
   if (e.code === 'KeyV') sim.eye = !sim.eye;
   if (e.code === 'KeyL') sim.laser = !sim.laser;
   if (e.code === 'KeyH') sim.aim = sim.aim === 'hip' ? 'none' : 'hip';
@@ -438,6 +463,40 @@ window.addEventListener('mousemove', (e) => {
   sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + e.movementY * 0.002, -0.3, 0.6);
 });
 
+/** Find a wall in front of the soldier that can be vaulted; returns the aligned start pose. */
+function vaultableWall() {
+  const P = S.group.position, f = new THREE.Vector3(Math.sin(sim.yaw), 0, Math.cos(sim.yaw));
+  const V = DEFS.Vault.obstacle;
+  for (const w of WALLS) {
+    let n = new THREE.Vector3(Math.sin(w.yaw), 0, Math.cos(w.yaw)); // wall normal
+    const rel = P.clone().sub(new THREE.Vector3(w.x, 0, w.z));
+    if (rel.dot(n) > 0) n.negate(); // approach from either side: n points from the soldier into the wall
+    const t = new THREE.Vector3(n.z, 0, -n.x);
+    const lateral = rel.dot(t), dist = -rel.dot(n) - V.wallThickness / 2; // to the near face
+    if (Math.abs(lateral) > w.half - 0.35 || dist < 0.5 || dist > 2.0 || f.dot(n) < Math.cos(deg(40))) continue;
+    const face = new THREE.Vector3(w.x, 0, w.z).addScaledVector(n, -V.wallThickness / 2).addScaledVector(t, lateral);
+    return { start: face.addScaledVector(n, -V.wallFront), yaw: Math.atan2(n.x, n.z), n };
+  }
+  return null;
+}
+function startVault(v) {
+  sim.vault = { from: S.group.position.clone(), to: v.start, yaw0: sim.yaw, yaw1: v.yaw, n: v.n, t: 0 };
+  const a = actions.Vault;
+  a.reset(); a.setEffectiveWeight(1); a.setEffectiveTimeScale(1); a.play();
+  (sim.base ? actions[sim.base] : current).crossFadeTo(a, 0.1, false);
+  sim.base = 'Vault'; current = a;
+}
+function updateVault(dt) {
+  const v = sim.vault;
+  v.t += dt;
+  const k = Math.min(1, v.t / 0.22); // ease into the authored take-off spot over the first steps
+  const e = k * k * (3 - 2 * k);
+  S.group.position.lerpVectors(v.from, v.to, e);
+  sim.yaw = v.yaw0 + wrapAngle(v.yaw1 - v.yaw0) * e;
+  S.group.rotation.y = sim.yaw;
+  sim.speed = 0;
+}
+
 function startJump() {
   sim.jumping = true;
   const a = actions.Jump;
@@ -447,6 +506,14 @@ function startJump() {
 }
 mixer.addEventListener('finished', (e) => {
   if (mode === 'play' && e.action === actions.Jump) { sim.jumping = false; sim.base = 'Jump'; }
+  if (mode === 'play' && e.action === actions.Vault && sim.vault) {
+    // the clip carries the body 2.5 m forward (root motion in Hips): move the character there
+    const adv = DEFS.Vault.rootMotion.z;
+    S.group.position.copy(sim.vault.to).addScaledVector(sim.vault.n, adv);
+    sim.vault = null;
+    setBase('Idle', 0);
+    mixer.update(0);
+  }
 });
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -457,6 +524,7 @@ const POSTURE_T = {
   'crouch>prone': 'Stand_To_Prone', 'prone>crouch': 'Prone_To_Stand',
 };
 function updatePlay(dt) {
+  if (sim.vault) { updateVault(dt); return; }
   // arrow keys orbit the camera (same as moving the mouse): left/right turn, up/down tilt
   const orbitX = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
   const orbitY = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
@@ -660,7 +728,7 @@ function frame() {
     applyLowerBodyYaw();
     updatePlayCamera(dt);
     const posture = sim.posture || 'stand';
-    const aiming = !sim.jumping && !sim.postureClip && (sim.aim !== 'none' || sim.fire || posture === 'prone') && !(posture === 'prone' && sim.speed > 0.05);
+    const aiming = !sim.jumping && !sim.vault && !sim.postureClip && (sim.aim !== 'none' || sim.fire || posture === 'prone') && !(posture === 'prone' && sim.speed > 0.05);
     sim.aimBlend = THREE.MathUtils.clamp((sim.aimBlend || 0) + (aiming ? dt : -dt) / 0.18, 0, 1);
     aimWeapon(smoother01(sim.aimBlend), posture === 'prone' ? deg(25) : deg(65));
   } else if (!paused) {
@@ -681,6 +749,8 @@ function frame() {
 
   if (mode === 'view' && current) {
     const clip = current.getClip();
+    viewerWall.visible = clip.name === 'Vault';
+    if (viewerWall.visible) { const o = clip.userData.obstacle; viewerWall.position.set(0, o.wallHeight / 2, o.wallFront + o.wallThickness / 2); }
     // scroll the ground for in-place locomotion so planted feet stay locked to it
     if ($('#scroll').checked && clip.userData.speed && !paused) {
       const ts = current.getEffectiveTimeScale();

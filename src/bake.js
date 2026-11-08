@@ -48,7 +48,7 @@ export function bakeClip(def) {
   }
   tracks.push(new THREE.VectorKeyframeTrack('Hips.position', times, hips));
   const clip = new THREE.AnimationClip(def.name, def.duration, tracks);
-  clip.userData = { loop: def.loop, speed: def.speed || 0, shots: def.shots || [], events: def.events || {}, rpm: def.rpm };
+  clip.userData = { loop: def.loop, speed: def.speed || 0, shots: def.shots || [], events: def.events || {}, rpm: def.rpm, rootMotion: def.rootMotion, obstacle: def.obstacle };
   return { clip, metrics, poses };
 }
 

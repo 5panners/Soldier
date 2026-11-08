@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { V3, qEuler, deg, PoseSolver } from './solver.js';
 const crawlSolver = new PoseSolver();
-import { BIND_LOCAL, LEG_UPPER, LEG_LOWER } from './skeleton.js';
+import { BIND_LOCAL, LEG_UPPER, LEG_LOWER, ANKLE_HEIGHT as ANKLE_HEIGHT_C } from './skeleton.js';
 import {
   STANCES, COMBAT_FEET, GRIPS, FINGERS_L, calibrate, gaitFoot, footFromPivot, footQuat, BALL_LOCAL,
   placeWeapon, rightFingers, periodicSpring, oneShotSpring, secondDerivative, periodicSmooth,
@@ -497,7 +497,9 @@ function hermiteKeys(ts, vs, t, tension = 0.85) {
   while (i < ts.length - 2 && t > ts[i + 1]) i++;
   const t0 = ts[i], t1 = ts[i + 1], h = t1 - t0;
   const u = Math.min(1, Math.max(0, (t - t0) / h));
-  const tan = (k) => (k <= 0 || k >= ts.length - 1 ? V3() : vs[k + 1].clone().sub(vs[k - 1]).divideScalar(ts[k + 1] - ts[k - 1]).multiplyScalar(tension));
+  // zero velocity at the ends and wherever a value is held between neighbouring keys (a planted foot)
+  const held = (k) => vs[k].distanceToSquared(vs[k - 1]) < 1e-12 || vs[k].distanceToSquared(vs[k + 1]) < 1e-12;
+  const tan = (k) => (k <= 0 || k >= ts.length - 1 || held(k) ? V3() : vs[k + 1].clone().sub(vs[k - 1]).divideScalar(ts[k + 1] - ts[k - 1]).multiplyScalar(tension));
   const m0 = tan(i), m1 = tan(i + 1);
   const u2 = u * u, u3 = u2 * u;
   return vs[i].clone().multiplyScalar(2 * u3 - 3 * u2 + 1).addScaledVector(m0, (u3 - 2 * u2 + u) * h)
@@ -545,9 +547,76 @@ function keyClip(name, keys, meta = {}) {
       trigger: Math.min(a.trigger, b.trigger) * (u < 0.5 ? a.trigger : b.trigger),
       modeA: a.mode, modeB: b.mode, modeT: u, arc: a.arc || null,
     };
-    frames.push(specFrom(st, { feet, kneePole }));
+    const spec = specFrom(st, { feet, kneePole, trigger: st.trigger });
+    // support hand leaving the rifle (e.g. planting on a wall) and coming back
+    const hb = lerp(a.handBlend || 0, b.handBlend || 0, u);
+    if (hb > 0 && meta.leftHand) {
+      spec.freeHand = { Left: () => ({ pos: meta.leftHand.pos.clone(), quat: meta.leftHand.quat.clone() }) };
+      spec.handBlend = { Left: hb };
+      spec.elbowPole.Left = a.elbowPole.Left.clone().lerp(b.elbowPole.Left, u).applyQuaternion(st.chestQ).normalize();
+      spec.fingers.Left = { index: [0.1, 0.1, 0.05].map((v) => lerp(FINGERS_L.cup.index[0], v, hb)), middle: [0.1, 0.1, 0.05].map((v, i) => lerp(FINGERS_L.cup.middle[i], v, hb)), thumb: FINGERS_L.cup.thumb, thumbOpp: 0.1 };
+    }
+    frames.push(spec);
   }
-  return { name, duration, loop: false, speed: 0, frames, ...meta };
+  const { leftHand, ...rest } = meta;
+  return { name, duration, loop: false, speed: 0, frames, ...rest };
+}
+
+// ------------------------------------------------------------------ vault
+/**
+ * One-handed step/speed vault over a 1.0 m wall (25 cm thick, front face 1.2 m ahead).
+ * Run-in, take off from the left foot, left hand plants on the wall top while the right hand
+ * keeps the rifle, knees tuck over the top, right foot lands first, left foot steps through,
+ * settle at the low ready 2.5 m further on (root motion is baked into the Hips track).
+ */
+export const VAULT = { wallHeight: 1.0, wallThickness: 0.25, wallFront: 1.2, advance: 2.5 };
+function vaultClip(LR) {
+  const A = ANKLE_HEIGHT_C, D = VAULT.advance;
+  const flat = (x, z, yaw = 0) => ({ pos: V3(x, A, z), quat: footQuat(0, yaw), toe: 0 });
+  const air = (x, y, z, pitch = 0) => ({ pos: V3(x, y, z), quat: footQuat(pitch, 0), toe: deg(8) });
+  const toeOff = (x, z, pitch) => { const f = footFromPivot(V3(x, 0, z), BALL_LOCAL, -pitch, 0); return { pos: f.pos, quat: f.quat, toe: pitch * 0.9 }; };
+  const carry = { ...LR.mode, rel: qEuler(deg(18), deg(30), deg(-18)), offset: V3(0.01, -0.02, 0.03) };
+  const K = (o) => derive(LR, { mode: carry, trigger: 0, handBlend: 0, ...o });
+  const KP = { Left: V3(0.1, 0, 1).normalize(), Right: V3(-0.1, 0, 1).normalize() };
+  const top = VAULT.wallHeight, wz = VAULT.wallFront + 0.17;
+  const keys = [
+    // run-in: right foot planted, left foot coming through
+    { t: 0.00, st: K({ hipsPos: V3(-0.01, 0.90, 0.00), hipsQ: qEuler(deg(10), deg(-3), 0), chestQ: qEuler(deg(16), deg(-8), 0),
+      feet: { Left: air(0.09, 0.22, -0.38, -deg(30)), Right: flat(-0.09, 0.06) }, kneePole: KP }) },
+    // take-off foot (left) plants
+    { t: 0.22, st: K({ hipsPos: V3(0.0, 0.90, 0.55), hipsQ: qEuler(deg(12), deg(2), 0), chestQ: qEuler(deg(24), deg(-4), 0),
+      feet: { Left: flat(0.09, 0.60), Right: toeOff(-0.09, 0.30, deg(30)) }, kneePole: KP, handBlend: 0.12 }) },
+    // drive: right knee up, body rising over the take-off foot, hand reaching for the wall
+    { t: 0.34, st: K({ hipsPos: V3(0.0, 1.00, 0.70), hipsQ: qEuler(deg(18), deg(6), 0), chestQ: qEuler(deg(42), deg(2), deg(-3)),
+      clavicle: { Left: clav('Left', -8, 22), Right: LR.clavicle.Right },
+      feet: { Left: toeOff(0.09, 0.73, deg(40)), Right: air(-0.10, 0.86, 0.68, deg(22)) }, kneePole: { Left: V3(0.1, 0.2, 1).normalize(), Right: V3(-0.1, 0.9, 0.6).normalize() }, handBlend: 0.85 }) },
+    // hand planted, hips lifting, knees driving up over the wall face
+    { t: 0.46, st: K({ hipsPos: V3(-0.02, 1.22, 0.86), hipsQ: qEuler(deg(30), deg(10), deg(-6)), chestQ: qEuler(deg(56), deg(6), deg(-14)),
+      clavicle: { Left: clav('Left', -14, 20), Right: LR.clavicle.Right },
+      feet: { Left: air(0.06, 0.98, 0.80, -deg(20)), Right: air(-0.12, 1.14, 1.06, deg(15)) }, kneePole: { Left: V3(0.15, 1.2, 0.8).normalize(), Right: V3(-0.15, 0.7, 1).normalize() }, handBlend: 1 }) },
+    // over the top: pelvis at its highest, feet clear the wall, weight over the planted arm
+    { t: 0.58, st: K({ hipsPos: V3(-0.07, 1.28, 1.20), hipsQ: qEuler(deg(18), deg(12), deg(-10)), chestQ: qEuler(deg(58), deg(8), deg(-18)),
+      clavicle: { Left: clav('Left', -16, 14), Right: LR.clavicle.Right },
+      feet: { Left: air(0.02, 1.19, 1.14, -deg(10)), Right: air(-0.14, 1.13, 1.56, deg(5)) }, kneePole: { Left: V3(0.2, 0.8, 1).normalize(), Right: V3(-0.2, 0.4, 1).normalize() }, handBlend: 1 }) },
+    // dropping: hand pushes off and returns to the rifle, right leg reaches for the ground
+    { t: 0.74, st: K({ hipsPos: V3(-0.05, 1.14, 1.80), hipsQ: qEuler(deg(8), deg(6), deg(-2)), chestQ: qEuler(deg(24), deg(0), 0),
+      clavicle: { Left: clav('Left', -6, 18), Right: LR.clavicle.Right },
+      feet: { Left: air(0.06, 0.92, 1.66, -deg(25)), Right: air(-0.13, 0.42, 2.10, deg(8)) }, kneePole: KP, handBlend: 0.2 }) },
+    // landing on the right foot, absorbing
+    { t: 0.88, st: K({ hipsPos: V3(-0.04, 0.84, 2.26), hipsQ: qEuler(deg(14), deg(-6), 0), chestQ: qEuler(deg(22), deg(-8), 0),
+      feet: { Left: air(0.10, 0.36, 2.08, -deg(15)), Right: flat(-0.15, -0.125 + D, deg(-12)) }, kneePole: KP, handBlend: 0 }) },
+    // left foot steps through
+    { t: 1.10, st: K({ hipsPos: V3(-0.02, 0.88, 2.45), hipsQ: qEuler(deg(8), deg(-12), 0), chestQ: qEuler(deg(12), deg(-11), 0),
+      feet: { Left: flat(0.125, 0.115 + D, deg(8)), Right: flat(-0.15, -0.125 + D, deg(-12)) }, kneePole: KP }) },
+    // settle into the low ready
+    { t: 1.40, st: derive(LR, {
+      hipsPos: LR.hipsPos.clone().add(V3(0, 0, D)),
+      feet: { Left: { ...COMBAT_FEET.Left, pos: COMBAT_FEET.Left.pos.clone().add(V3(0, 0, D)) }, Right: { ...COMBAT_FEET.Right, pos: COMBAT_FEET.Right.pos.clone().add(V3(0, 0, D)) } },
+    }) },
+  ];
+  // palm flat on the wall top, fingers forward (wrist behind and above the palm centre)
+  const leftHand = { pos: V3(0.13, top + 0.024, wz - 0.05), quat: qEuler(0, -Math.PI / 2, 0) };
+  return keyClip('Vault', keys, { leftHand, rootMotion: { z: D }, obstacle: { ...VAULT } });
 }
 
 // ------------------------------------------------------------------ crawl
@@ -720,6 +789,7 @@ export function buildClipLibrary() {
     { t: 0, st: PR }, { t: 0.35, st: LIE }, { t: 0.75, st: DOWN }, { t: 1.15, st: KNEEL }, { t: 1.5, st: CR }, { t: 1.9, st: LR },
   ]));
 
+  clips.push(vaultClip(LR));
   clips.push(...jumpClips());
   return clips;
 }

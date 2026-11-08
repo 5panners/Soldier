@@ -312,6 +312,22 @@
     "shots": [],
     "events": {}
   },
+  "Vault": {
+    "duration": 1.4,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {},
+    "rootMotion": {
+      "z": 2.5
+    },
+    "obstacle": {
+      "wallHeight": 1,
+      "wallThickness": 0.25,
+      "wallFront": 1.2,
+      "advance": 2.5
+    }
+  },
   "Jump": {
     "duration": 1.85,
     "loop": false,

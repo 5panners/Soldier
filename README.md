@@ -1,7 +1,7 @@
 # Soldier Simulator
 
 A flat-shaded, low-poly, fully rigged infantry soldier with rifle animations, plus a browser simulator to preview and play them.
-Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifle + 43 animation clips) that you can import into Unity, Unreal, Godot or Blender.
+Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifle + 44 animation clips) that you can import into Unity, Unreal, Godot or Blender.
 
 ![ADS](docs/images/ads.png)
 
@@ -16,7 +16,7 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 * **Soldier model.** A stocky, armoured build with a short, thick neck. One skinned mesh, one material and about 3.2k triangles. It is flat shaded from true face normals, so it stays faceted in any engine, and coloured through a small palette texture. The kit is a high-cut helmet with headset and NVG mount, ballistic glasses, combat shirt, plate carrier with mag/admin pouches, radio, assault pack, battle belt, knee pads, gloves and boots.
 * **Rifle.** A generic carbine of original design with a red-dot optic (the reticle is modelled). It is attached to a `Weapon_R` socket bone on the right hand and carries named attach points: `Muzzle`, `Ejection`, `SightLine` and `LeftHand_IK`.
 * **Skeleton.** 44 bones with Mixamo-style names (`Hips`, `Spine`…`Spine2`, `Neck`, `Head`, `LeftArm`, `LeftForeArm`, `LeftHand`, finger chains, `LeftUpLeg`, `LeftLeg`, `LeftFoot`, `LeftToeBase`…). It is bound in a T-pose. Units are metres, +Y is up and the character faces +Z.
-* **Animations.** 43 clips baked at 60 fps:
+* **Animations.** 44 clips baked at 60 fps:
 
 | Group | Clips |
 |---|---|
@@ -26,7 +26,7 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
 | Crouch | `Crouch_Idle`, `Crouch_Walk` 0.85 m/s, `Crouch_ADS_Idle`, `Crouch_ADS_Walk`, `Crouch_ADS_Fire`, `Crouch_ADS_Fire_Auto`, `Stand_To_Crouch`, `Crouch_To_Stand`, `Crouch_To_Crouch_ADS`, `Crouch_ADS_To_Crouch` |
 | Prone | `Prone_Idle` (aiming), `Prone_Fire`, `Prone_Fire_Auto`, `Prone_Crawl` 0.20 m/s (belly crawl), `Stand_To_Prone`, `Prone_To_Stand` |
-| Jump | `Jump` (full), `Jump_Start`, `Jump_Air` (loop), `Jump_Land` |
+| Jump & vault | `Jump` (full), `Jump_Start`, `Jump_Air` (loop), `Jump_Land`, `Vault` (one-handed vault over a 1 m wall, 2.5 m root motion) |
 | Static poses | `Idle_Pose`, `ADS_Pose`, `HipFire_Pose`, `Crouch_Pose`, `Crouch_ADS_Pose`, `Prone_Pose` (aim-offset / additive references) |
 
 Per-clip metadata is in [`exports/animations.json`](exports/animations.json) and in the glTF `extras` of the `Soldier` node: duration, loop flag, in-place speed, shot times and jump take-off/landing times. Details are in [docs/ANIMATIONS.md](docs/ANIMATIONS.md).
@@ -45,7 +45,7 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 
 * **Viewer** lets you pick any clip, cross-fade between clips, scrub, step frames and change playback speed. You can also show the skeleton or wireframe and switch between camera presets. In-place clips scroll the ground at the clip's speed, so you can check that planted feet stay locked.
 * **Play (WASD)** is a third-person sandbox with a firing range:
-  * `W A S D`: move. `Shift`: run. `Space`: jump.
+  * `W A S D`: move. `Shift`: run. `Space`: jump, or vault when facing one of the low walls.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
   * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
   * `V`: look through the soldier's right eye down the optic. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
@@ -108,6 +108,7 @@ Tips:
 * **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 4.3, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.20 m/s) so the feet stay locked to the ground.
 * **Weapon socket.** The rifle hangs off `Weapon_R`. To swap guns, attach your own weapon to that bone. The grip origin is the weapon origin, +Z is the muzzle and +Y is up.
 * **Support hand.** Use the `LeftHand_IK` node with your engine's two-bone IK to keep the left hand on the handguard when blending or layering.
+* **Vault.** The clip is authored against a wall 1.0 m high and 25 cm thick, with its near face 1.2 m in front of the start position. It moves the body 2.5 m forward in the Hips track (root motion). Either extract root motion, or play it from that spot and move the character 2.5 m forward when it ends, as the simulator does. The numbers are in `animations.json` under `Vault.obstacle` and `Vault.rootMotion`.
 * **Recoil layering.** Use `ADS_Pose` / `HipFire_Pose` as the reference pose when you make the fire clips additive, then layer them over walking. The simulator does exactly this.
 
 ## Project layout
