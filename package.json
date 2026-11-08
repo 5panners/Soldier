@@ -1,0 +1,16 @@
+{
+  "name": "soldier-simulator",
+  "version": "1.0.0",
+  "description": "Flat-shaded rigged soldier with procedurally authored, IK-solved rifle animations. Exports GLB for game engines.",
+  "type": "module",
+  "scripts": {
+    "serve": "node tools/serve.mjs",
+    "validate": "node tools/validate.mjs",
+    "export": "node tools/export-glb.mjs",
+    "vendor": "node tools/vendor.mjs"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "license": "MIT"
+}

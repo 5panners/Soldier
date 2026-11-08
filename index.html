@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soldier Simulator</title>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+<style>
+  :root { --bg:#14171a; --panel:rgba(20,23,26,.88); --line:#2c3238; --fg:#e7e4da; --mute:#9aa09a; --acc:#c9a85c; --on:#3b4a32; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; overflow:hidden; }
+  #view { position:fixed; inset:0; }
+  #panel { position:fixed; top:12px; left:12px; bottom:12px; width:300px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; overflow:auto; backdrop-filter: blur(6px); }
+  h1 { font-size:15px; margin:0 0 2px; letter-spacing:.04em; text-transform:uppercase; color:var(--acc); }
+  .sub { color:var(--mute); font-size:12px; margin-bottom:10px; }
+  .group { margin:12px 0 6px; color:var(--mute); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .btns { display:flex; flex-wrap:wrap; gap:5px; }
+  button { background:#22272c; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font:inherit; font-size:12px; cursor:pointer; }
+  button:hover { border-color:#4a535b; }
+  button.on { background:var(--on); border-color:#62774f; }
+  .row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .row label { width:62px; color:var(--mute); font-size:12px; }
+  .row input[type=range] { flex:1; accent-color: var(--acc); }
+  .val { width:48px; text-align:right; color:var(--mute); font-variant-numeric: tabular-nums; }
+  .checks { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; margin-top:6px; color:var(--mute); }
+  #clipinfo { margin-top:8px; color:var(--mute); min-height:18px; }
+  #export { width:100%; margin-top:12px; padding:8px; background:#3a3424; border-color:#6b5c35; }
+  #status { margin-top:6px; color:var(--mute); font-size:11px; }
+  #modes { display:flex; gap:6px; margin:8px 0 4px; }
+  #modes button { flex:1; padding:7px; }
+  #help { position:fixed; right:12px; bottom:12px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; color:var(--mute); font-size:12px; display:none; }
+  body.playing #help { display:block; }
+  body.playing .viewonly { display:none; }
+  #reticle { position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px; border-radius:50%; background:rgba(255,255,255,.7); display:none; pointer-events:none; }
+  body.playing #reticle { display:block; }
+  kbd { background:#2a2f35; border:1px solid #3a4148; border-radius:4px; padding:0 4px; color:var(--fg); }
+  body.noui #panel, body.noui #help { display:none; }
+  @media (max-width: 700px) { #panel { width:auto; right:12px; bottom:auto; max-height:45vh; } }
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="reticle"></div>
+<div id="panel">
+  <h1>Soldier Simulator</h1>
+  <div class="sub">Flat-shaded rigged infantryman · IK-solved rifle animations</div>
+  <div id="modes"><button id="modeview" class="on">Viewer</button><button id="modeplay">Play (WASD)</button></div>
+  <div class="viewonly">
+    <div id="clips"></div>
+    <div id="clipinfo"></div>
+    <div class="group">Playback</div>
+    <div class="row"><button id="pause">❚❚ Pause</button><button id="step">Step</button><input id="time" type="range" min="0" max="1" step="0.001" value="0"></div>
+    <div class="row"><label>Speed</label><input id="speed" type="range" min="0.05" max="2" step="0.05" value="1"><span class="val" id="speedv">1.00×</span></div>
+    <div class="row"><label>Crossfade</label><input id="fade" type="range" min="0" max="1" step="0.05" value="0.3"><span class="val" id="fadev">0.30 s</span></div>
+    <div class="checks">
+      <label><input type="checkbox" id="scroll" checked> Scroll ground</label>
+      <label><input type="checkbox" id="ikfix" checked> Hand IK fix-up</label>
+      <label><input type="checkbox" id="skel"> Skeleton</label>
+      <label><input type="checkbox" id="wire"> Wireframe</label>
+    </div>
+    <div class="group">Camera</div>
+    <div class="btns">
+      <button data-cam="orbit" class="on">Orbit</button><button data-cam="side">Side</button><button data-cam="front">Front</button>
+      <button data-cam="back">Back</button><button data-cam="shoulder">Shoulder</button><button data-cam="close">Close</button>
+      <button data-cam="hands">Hands</button><button data-cam="feet">Feet</button>
+    </div>
+  </div>
+  <button id="export">⬇ Export GLB</button>
+  <div id="status">Loading…</div>
+</div>
+<div id="help">
+  <kbd>W A S D</kbd> move · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump<br>
+  <kbd>RMB</kbd> aim down sights · <kbd>LMB</kbd> fire · <kbd>H</kbd> hip-fire stance<br>
+  <kbd>V</kbd> eye view (through the optic) · <kbd>Esc</kbd> back to viewer
+</div>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>

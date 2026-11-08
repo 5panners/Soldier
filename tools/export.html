@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Export</title>
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.js","three/addons/":"../vendor/three/addons/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { bakeAll } from '../src/bake.js';
+import { exportGLB, clipMetadata } from '../src/export.js';
+const baked = bakeAll();
+const buf = await exportGLB(baked);
+// round-trip check
+const gltf = await new GLTFLoader().parseAsync(buf.slice(0), '');
+let skinned = 0, bones = 0, tris = 0;
+gltf.scene.traverse((o) => { if (o.isSkinnedMesh) { skinned++; bones = o.skeleton.bones.length; tris += o.geometry.attributes.position.count / 3; } else if (o.isMesh) tris += o.geometry.attributes.position.count / 3; });
+const mixer = new THREE.AnimationMixer(gltf.scene);
+for (const c of gltf.animations) { mixer.clipAction(c).play(); }
+mixer.update(0.5);
+const bytes = new Uint8Array(buf);
+let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+window.__result = { b64: btoa(bin), meta: clipMetadata(baked), check: { animations: gltf.animations.length, skinned, bones, tris, size: buf.byteLength } };
+window.__done = true;
+</script></body></html>

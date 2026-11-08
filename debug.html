@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Pose debug</title>
+<style>html,body{margin:0;background:#9fb3c2;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+import { buildSoldier } from './src/soldier.js';
+import { PoseSolver } from './src/solver.js';
+import { calibrate, STANCES, stanceSpec } from './src/motion.js';
+const P = new URLSearchParams(location.search);
+const W = 900, H = 900;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.shadowMap.enabled = true; document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#9fb3c2');
+scene.add(new THREE.HemisphereLight('#dfe8f0', '#5b5446', 1.4));
+const sun = new THREE.DirectionalLight('#fff4e0', 2.2); sun.position.set(2, 5, 3); sun.castShadow = true; scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshStandardMaterial({ color: '#7d8a6a' }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+scene.add(new THREE.GridHelper(10, 20, 0x445544, 0x667766));
+const sol = buildSoldier(); scene.add(sol.group);
+const stance = P.get('stance');
+let res = null;
+if (stance && stance !== 'tpose') {
+  calibrate();
+  res = new PoseSolver().solve(stanceSpec(STANCES[stance]));
+  for (const [n, q] of Object.entries(res.local)) sol.bones[n].quaternion.copy(q);
+  sol.bones.Hips.position.copy(res.hipsPos);
+}
+const cams = {
+  front: [[0, 1.3, 3.2], [0, 1.0, 0]], side: [[-3.2, 1.3, 0.3], [0, 1.0, 0.2]], left: [[3.2, 1.3, 0.3], [0, 1.0, 0.2]],
+  three: [[-2.0, 1.6, 2.4], [0, 1.05, 0.1]], close: [[-0.9, 1.55, 1.1], [-0.1, 1.35, 0.25]], top: [[0, 4, 0.01], [0, 0, 0]],
+  back: [[-0.6, 1.6, -2.2], [0, 1.2, 0.3]], closeL: [[0.9, 1.5, 1.0], [-0.05, 1.3, 0.25]], hands: [[-0.5, 1.2, 1.0], [-0.1, 1.2, 0.3]],
+};
+const [cp, ct] = cams[P.get('cam')] || cams.three;
+const camera = new THREE.PerspectiveCamera(Number(P.get('fov') || 35), W / H, 0.01, 100);
+camera.position.set(...cp); camera.lookAt(...ct);
+if (P.get('cam') === 'eye' && res) {
+  sol.group.updateMatrixWorld(true);
+  const eye = new THREE.Vector3(-0.032, 0.083, 0.094).applyMatrix4(sol.bones.Head.matrixWorld);
+  camera.position.copy(eye); camera.fov = 30; camera.near = 0.005; camera.updateProjectionMatrix();
+  camera.lookAt(eye.clone().add(new THREE.Vector3(0, 0, 1)));
+}
+renderer.render(scene, camera);
+window.__done = true;
+</script></body></html>

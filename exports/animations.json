@@ -1,0 +1,193 @@
+{
+  "Idle": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "HipFire_Idle": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "ADS_Idle": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Walk": {
+    "duration": 1.1,
+    "loop": true,
+    "inPlaceSpeed": 1.25,
+    "shots": [],
+    "events": {}
+  },
+  "Run": {
+    "duration": 0.68,
+    "loop": true,
+    "inPlaceSpeed": 3.2,
+    "shots": [],
+    "events": {}
+  },
+  "ADS_Walk": {
+    "duration": 1.2,
+    "loop": true,
+    "inPlaceSpeed": 0.9,
+    "shots": [],
+    "events": {}
+  },
+  "HipFire_Walk": {
+    "duration": 1.2,
+    "loop": true,
+    "inPlaceSpeed": 0.9,
+    "shots": [],
+    "events": {}
+  },
+  "Idle_Pose": {
+    "duration": 0.0167,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "HipFire_Pose": {
+    "duration": 0.0167,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "ADS_Pose": {
+    "duration": 0.0167,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "ADS_Fire": {
+    "duration": 0.5,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0.06
+    ],
+    "events": {}
+  },
+  "ADS_Fire_Auto": {
+    "duration": 0.6,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0,
+      0.0857,
+      0.1714,
+      0.2571,
+      0.3429,
+      0.4286,
+      0.5143
+    ],
+    "events": {}
+  },
+  "HipFire_Fire": {
+    "duration": 0.5,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0.06
+    ],
+    "events": {}
+  },
+  "HipFire_Fire_Auto": {
+    "duration": 0.6,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0,
+      0.0857,
+      0.1714,
+      0.2571,
+      0.3429,
+      0.4286,
+      0.5143
+    ],
+    "events": {}
+  },
+  "Idle_To_ADS": {
+    "duration": 0.32,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "ADS_To_Idle": {
+    "duration": 0.4,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Idle_To_HipFire": {
+    "duration": 0.3,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "HipFire_To_Idle": {
+    "duration": 0.35,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "HipFire_To_ADS": {
+    "duration": 0.28,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "ADS_To_HipFire": {
+    "duration": 0.28,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Jump": {
+    "duration": 1.85,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {
+      "takeoff": 0.62,
+      "land": 1.12
+    }
+  },
+  "Jump_Start": {
+    "duration": 0.6167,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Jump_Land": {
+    "duration": 0.7333,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Jump_Air": {
+    "duration": 0.8,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  }
+}

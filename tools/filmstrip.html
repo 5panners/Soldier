@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Filmstrip</title>
+<style>html,body{margin:0;background:#9fb3c2}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three/three.module.js","three/addons/":"../vendor/three/addons/"}}</script>
+</head><body><script type="module">
+// Renders N evenly spaced frames of a clip into one image: ?clip=Walk&n=8&cam=side&cols=4
+import * as THREE from 'three';
+import { buildSoldier } from '../src/soldier.js';
+import { bakeClip } from '../src/bake.js';
+import { buildClipLibrary } from '../src/clips.js';
+const P = new URLSearchParams(location.search);
+const n = Number(P.get('n') || 8), cols = Number(P.get('cols') || 4), rows = Math.ceil(n / cols);
+const cw = Number(P.get('w') || 300), ch = Number(P.get('h') || 400);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(cw * cols, ch * rows); renderer.setScissorTest(true); renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#9fb3c2');
+scene.add(new THREE.HemisphereLight('#dfe8f0', '#5b5446', 1.4));
+const sun = new THREE.DirectionalLight('#fff4e0', 2.2); sun.position.set(2, 5, 3); sun.castShadow = true; scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({ color: '#7d8a6a' }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const grid = new THREE.GridHelper(20, 80, 0x445544, 0x5f6e57); scene.add(grid);
+const S = buildSoldier(); scene.add(S.group);
+const name = P.get('clip') || 'Walk';
+const def = buildClipLibrary().find((d) => d.name === name);
+const { clip } = bakeClip(def);
+const mixer = new THREE.AnimationMixer(S.group); const act = mixer.clipAction(clip); act.play();
+const cams = { side: [[-3.0, 1.0, 0.25], [0, 0.95, 0.25]], front: [[0, 1.1, 3.2], [0, 0.95, 0]], three: [[-2.1, 1.4, 2.2], [0, 1.0, 0.15]],
+  upper: [[-1.6, 1.5, 0.9], [0, 1.3, 0.3]], left: [[3.0, 1.0, 0.25], [0, 0.95, 0.25]], feet: [[-1.6, 0.4, 0.4], [0, 0.25, 0.1]] };
+const [cp, ct] = cams[P.get('cam') || 'side'];
+const camera = new THREE.PerspectiveCamera(Number(P.get('fov') || 40), cw / ch, 0.01, 100);
+camera.position.set(...cp); camera.lookAt(...ct);
+const speed = clip.userData.speed || 0;
+const span = Number(P.get('span') || 1);
+for (let i = 0; i < n; i++) {
+  const t = (i / (def.loop ? n : Math.max(1, n - 1))) * def.duration * span;
+  act.time = Math.min(t, def.duration); mixer.update(0);
+  grid.position.z = -(speed * t) % 0.25; // ground motion for in-place clips
+  const x = (i % cols) * cw, y = (rows - 1 - Math.floor(i / cols)) * ch;
+  renderer.setViewport(x, y, cw, ch); renderer.setScissor(x, y, cw, ch);
+  renderer.render(scene, camera);
+}
+window.__done = true;
+</script></body></html>

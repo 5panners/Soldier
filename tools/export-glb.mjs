@@ -1,0 +1,21 @@
+// Headless GLB export: node tools/export-glb.mjs  -> exports/soldier.glb + exports/animations.json
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { startServer } from './serve.mjs';
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const server = await startServer(8766);
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage();
+page.on('pageerror', (e) => console.error('pageerror:', e.message));
+await page.goto('http://localhost:8766/tools/export.html');
+await page.waitForFunction('window.__done === true', null, { timeout: 120000 });
+const r = await page.evaluate(() => window.__result);
+fs.mkdirSync(path.join(root, 'exports'), { recursive: true });
+fs.writeFileSync(path.join(root, 'exports/soldier.glb'), Buffer.from(r.b64, 'base64'));
+fs.writeFileSync(path.join(root, 'exports/animations.json'), JSON.stringify(r.meta, null, 2) + '\n');
+console.log('Round-trip check:', r.check);
+await browser.close(); server.close();
