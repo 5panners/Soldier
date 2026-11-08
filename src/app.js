@@ -186,13 +186,17 @@ function fireEffects() {
   fx.add(cone, star);
   live.push({ o: cone, life: 0.045, t: 0 }, { o: star, life: 0.035, t: 0 });
   flashLight.position.copy(mp); flashLight.intensity = 6;
-  // tracer (every 3rd round)
+  // the round leaves along the bore axis (the Muzzle node's +Z is the barrel's axis)
+  const bore = new THREE.Vector3(0, 0, 1).applyQuaternion(mq);
+  const hit = castRay(mp, bore);
+  lastShot = { from: mp.clone(), dir: bore.clone(), hit: hit.point.clone(), t: performance.now() };
   if (Math.random() < 0.34) {
     const tr = new THREE.Mesh(tracerGeo, tracerMat.clone());
     tr.position.copy(mp); tr.quaternion.copy(mq);
     fx.add(tr);
-    live.push({ o: tr, life: 0.35, t: 0, vel: new THREE.Vector3(0, 0, 1).applyQuaternion(mq).multiplyScalar(160) });
+    live.push({ o: tr, life: Math.min(0.35, hit.distance / 160), t: 0, vel: bore.clone().multiplyScalar(160) });
   }
+  if (hit.object) impact(hit);
   // shell casing: ejected right, up and slightly back
   const ep = new THREE.Vector3(), eq = new THREE.Quaternion();
   ejectNode.getWorldPosition(ep); ejectNode.getWorldQuaternion(eq);
@@ -202,6 +206,40 @@ function fireEffects() {
   fx.add(sh);
   live.push({ o: sh, life: 3.0, t: 0, vel: v, spin: new THREE.Vector3(Math.random() * 30, Math.random() * 30, 0), shell: true });
 }
+// bore-sight laser (L in play mode): drawn exactly along the barrel axis to where a round would land
+const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]);
+const laser = new THREE.Line(laserGeo, new THREE.LineBasicMaterial({ color: '#ff3b24' }));
+laser.frustumCulled = false; laser.visible = false;
+scene.add(laser);
+
+// ------------------------------------------------------------------ ballistics (hitscan along the bore)
+const raycaster = new THREE.Raycaster();
+let lastShot = null;
+function castRay(origin, dir, far = 400) {
+  raycaster.set(origin, dir); raycaster.far = far;
+  const h = raycaster.intersectObjects([ground, props], true)[0];
+  return h ? { point: h.point, distance: h.distance, object: h.object, normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0) }
+    : { point: origin.clone().addScaledVector(dir, far), distance: far, object: null };
+}
+const holeGeo = new THREE.CircleGeometry(0.012, 6);
+const holeMat = new THREE.MeshBasicMaterial({ color: '#141414', polygonOffset: true, polygonOffsetFactor: -2 });
+const dustMat = new THREE.MeshStandardMaterial({ color: '#b5a98a', flatShading: true, transparent: true, opacity: 0.9 });
+const dustGeo = new THREE.TetrahedronGeometry(0.03, 0);
+function impact(hit) {
+  const hole = new THREE.Mesh(holeGeo, holeMat);
+  hole.position.copy(hit.point).addScaledVector(hit.normal, 0.002);
+  hole.lookAt(hit.point.clone().add(hit.normal));
+  fx.add(hole);
+  live.push({ o: hole, life: 20, t: 0, keep: true });
+  for (let i = 0; i < 6; i++) {
+    const d = new THREE.Mesh(dustGeo, dustMat.clone());
+    d.position.copy(hit.point);
+    const v = hit.normal.clone().multiplyScalar(1.2 + Math.random()).add(new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.6, Math.random() - 0.5));
+    fx.add(d);
+    live.push({ o: d, life: 0.5, t: 0, vel: v, dust: true });
+  }
+}
+
 function updateEffects(dt) {
   flashLight.intensity = Math.max(0, flashLight.intensity - dt * 120);
   for (let i = live.length - 1; i >= 0; i--) {
@@ -213,7 +251,8 @@ function updateEffects(dt) {
       if (e.spin) { e.o.rotation.x += e.spin.x * dt; e.o.rotation.y += e.spin.y * dt; }
       if (e.shell && e.o.position.y < 0.005) { e.o.position.y = 0.005; e.vel.multiplyScalar(0.3); e.vel.y = Math.abs(e.vel.y) * 0.4; e.spin.multiplyScalar(0.5); }
     }
-    if (!e.shell && e.o.material) e.o.material.opacity = Math.max(0, 1 - e.t / e.life);
+    if (e.dust) e.vel.y -= 4 * dt;
+    if (!e.shell && !e.keep && e.o.material) e.o.material.opacity = Math.max(0, 1 - e.t / e.life);
     if (e.t > e.life) { fx.remove(e.o); live.splice(i, 1); }
   }
 }
@@ -373,6 +412,7 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'Space' && !sim.jumping && (sim.posture || 'stand') === 'stand' && !sim.postureClip) startJump();
   if (e.code === 'KeyV') sim.eye = !sim.eye;
+  if (e.code === 'KeyL') sim.laser = !sim.laser;
   if (e.code === 'KeyH') sim.aim = sim.aim === 'hip' ? 'none' : 'hip';
   if (e.code === 'KeyC') sim.wantPosture = (sim.posture || 'stand') === 'crouch' ? 'stand' : 'crouch';
   if (e.code === 'KeyZ') sim.wantPosture = (sim.posture || 'stand') === 'prone' ? 'stand' : 'prone';
@@ -508,10 +548,58 @@ function updatePlay(dt) {
   }
   if (fireOn) {
     sim.fireTimer -= dt;
-    if (sim.fireTimer <= 0) { fireEffects(); sim.fireTimer += 60 / 700; }
+    if (sim.fireTimer <= 0) { sim.pendingShots = (sim.pendingShots || 0) + 1; sim.fireTimer += 60 / 700; }
   }
 }
 const deg = (d) => (d * Math.PI) / 180;
+const smoother01 = (x) => x * x * x * (x * (x * 6 - 15) + 10);
+
+// ------------------------------------------------------------------ aim: barrel onto the crosshair
+// The camera's centre ray picks the aim point; the upper body (Spine1 + Spine2, so arms, rifle
+// and head move as one and the cheek weld is kept) is rotated until the bore axis passes
+// exactly through that point. Rounds are then cast along the bore, so the barrel, the
+// crosshair and the bullet path all coincide.
+const _aim = { point: new THREE.Vector3(), err: 0 };
+function aimTarget() {
+  const dir = new THREE.Vector3();
+  if (sim.eye) {
+    // looking through the optic: aim along the camera yaw/pitch from the eye
+    dir.set(Math.sin(sim.camYaw) * Math.cos(sim.camPitch), -Math.sin(sim.camPitch), Math.cos(sim.camYaw) * Math.cos(sim.camPitch));
+    const eye = RIGHT_EYE_LOCAL.clone().applyMatrix4(S.bones.Head.matrixWorld);
+    return castRay(eye, dir.normalize()).point;
+  }
+  camera.getWorldDirection(dir);
+  return castRay(camera.position.clone(), dir).point;
+}
+function boreRay() {
+  S.group.updateMatrixWorld(true);
+  const p = muzzleNode.getWorldPosition(new THREE.Vector3());
+  const q = muzzleNode.getWorldQuaternion(new THREE.Quaternion());
+  return { p, d: new THREE.Vector3(0, 0, 1).applyQuaternion(q) };
+}
+function rotateBoneWorld(bone, C) {
+  const parentQ = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+  const cur = bone.getWorldQuaternion(new THREE.Quaternion());
+  bone.quaternion.copy(parentQ.invert().multiply(C.clone().multiply(cur)));
+}
+function aimWeapon(weight, maxAngle) {
+  if (weight <= 0.001) return;
+  S.group.updateMatrixWorld(true);
+  const target = aimTarget();
+  _aim.point.copy(target);
+  for (let i = 0; i < 4; i++) {
+    const { p, d } = boreRay();
+    const want = target.clone().sub(p).normalize();
+    let C = new THREE.Quaternion().setFromUnitVectors(d, want);
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(C.w)));
+    if (ang > maxAngle) C = qPow(C, maxAngle / ang);
+    if (weight < 1) C = qPow(C, weight);
+    if (i === 0) { rotateBoneWorld(S.bones.Spine1, qPow(C, 0.45)); rotateBoneWorld(S.bones.Spine2, qPow(C, 0.55)); }
+    else rotateBoneWorld(S.bones.Spine2, C);
+  }
+  const { p, d } = boreRay();
+  _aim.err = d.angleTo(target.clone().sub(p).normalize());
+}
 
 function applyLowerBodyYaw() {
   // rotate the pelvis toward the move direction while the chest keeps aiming
@@ -541,8 +629,8 @@ function updatePlayCamera(dt) {
     }
   }
   camera.fov = sim.aim === 'ads' ? 30 : 42; camera.near = 0.02; camera.updateProjectionMatrix();
-  const dist = sim.aim === 'ads' ? 1.7 : 2.6;
-  const side = sim.aim === 'ads' ? -0.62 : -0.55;
+  const dist = sim.aim === 'ads' ? 2.1 : 2.6;
+  const side = sim.aim === 'ads' ? -0.75 : -0.55;
   const ph = { stand: sim.aim === 'ads' ? 1.6 : 1.55, crouch: 1.15, prone: 0.75 }[sim.posture || 'stand'];
   const pivot = S.group.position.clone().add(new THREE.Vector3(0, ph, 0));
   const fwd = new THREE.Vector3(Math.sin(sim.camYaw), 0, Math.cos(sim.camYaw));
@@ -570,10 +658,26 @@ function frame() {
     updatePlay(dt);
     mixer.update(dt);
     applyLowerBodyYaw();
+    updatePlayCamera(dt);
+    const posture = sim.posture || 'stand';
+    const aiming = !sim.jumping && !sim.postureClip && (sim.aim !== 'none' || sim.fire || posture === 'prone') && !(posture === 'prone' && sim.speed > 0.05);
+    sim.aimBlend = THREE.MathUtils.clamp((sim.aimBlend || 0) + (aiming ? dt : -dt) / 0.18, 0, 1);
+    aimWeapon(smoother01(sim.aimBlend), posture === 'prone' ? deg(25) : deg(65));
   } else if (!paused) {
     mixer.update(dt);
   }
   if (ikFix) leftHandIK();
+  if (mode === 'play') {
+    if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
+    while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
+    document.body.classList.toggle('eyeview', !!sim.eye);
+    laser.visible = sim.laser;
+    if (sim.laser) {
+      const { p, d } = boreRay();
+      const h = castRay(p, d);
+      laserGeo.setFromPoints([p, h.point]);
+    }
+  } else laser.visible = false;
 
   if (mode === 'view' && current) {
     const clip = current.getClip();
@@ -582,7 +686,8 @@ function frame() {
       const ts = current.getEffectiveTimeScale();
       groundScroll += clip.userData.speed * dt * ts * current.getEffectiveWeight();
     }
-    gtex.offset.y = groundScroll / 2; // texture tile = 120/60 = 2 m
+    // plane local +Y maps to world -Z, so the texture offset has the opposite sign of the props
+    gtex.offset.y = -groundScroll / 2; // texture tile = 120/60 = 2 m
     props.position.z = -groundScroll;
     // effects for fire clips
     const t = current.time;
@@ -590,7 +695,7 @@ function frame() {
     lastClipTime = t;
     $('#time').value = clip.duration > 0.05 ? (t / clip.duration) : 0;
   }
-  if (mode === 'play') updatePlayCamera(dt); else controls.update();
+  if (mode !== 'play') controls.update();
   updateEffects(dt);
   sun.position.copy(S.group.position).add(new THREE.Vector3(4, 8, 5));
   sun.target.position.copy(S.group.position);
@@ -617,6 +722,6 @@ if (params.has('t')) {
   if (current.getClip().userData.speed) props.position.z = 0;
 }
 if (params.has('noui')) document.body.classList.add('noui');
-window.__dbg = { sim, camera, S, actions };
+window.__dbg = { sim, camera, S, actions, aim: _aim, boreRay, lastShot: () => lastShot };
 requestAnimationFrame(frame);
 setTimeout(() => { window.__done = true; }, 400);

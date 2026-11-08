@@ -33,6 +33,7 @@
   body.playing .viewonly { display:none; }
   #reticle { position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px; border-radius:50%; background:rgba(255,255,255,.7); display:none; pointer-events:none; }
   body.playing #reticle { display:block; }
+  body.playing.eyeview #reticle { display:none; }
   kbd { background:#2a2f35; border:1px solid #3a4148; border-radius:4px; padding:0 4px; color:var(--fg); }
   body.noui #panel, body.noui #help { display:none; }
   @media (max-width: 700px) { #panel { width:auto; right:12px; bottom:auto; max-height:45vh; } }
@@ -73,7 +74,7 @@
   <kbd>← → ↑ ↓</kbd> or mouse: orbit camera<br>
   <kbd>C</kbd> crouch · <kbd>Z</kbd> prone (WASD to crawl)<br>
   <kbd>RMB</kbd> aim down sights · <kbd>LMB</kbd> fire · <kbd>H</kbd> hip-fire stance<br>
-  <kbd>V</kbd> eye view (through the optic) · <kbd>Esc</kbd> back to viewer
+  <kbd>V</kbd> eye view (through the optic) · <kbd>L</kbd> bore-sight laser · <kbd>Esc</kbd> back to viewer
 </div>
 <script type="module" src="./src/app.js"></script>
 </body>

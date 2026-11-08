@@ -48,9 +48,9 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
   * `W A S D`: move. `Shift`: run. `Space`: jump.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
   * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
-  * `V`: look through the soldier's right eye down the optic. `Esc`: back to the viewer.
+  * `V`: look through the soldier's right eye down the optic. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
 
-  Firing layers additive recoil on top of the locomotion and spawns muzzle flash, tracers and ejected brass. While aiming, the pelvis turns toward the move direction and the chest keeps aiming. Moving backward plays the walk in reverse.
+  The upper body turns so the barrel's bore axis passes exactly through the crosshair point (within 0.01°). Every round is cast along the bore and lands where it hits, with a bullet hole and dust. Firing layers additive recoil on top of the locomotion and spawns muzzle flash, tracers and ejected brass. While aiming, the pelvis turns toward the move direction and the chest keeps aiming. Moving backward plays the walk in reverse.
 * **⬇ Export GLB** downloads the same file as `exports/soldier.glb`.
 
 ## How the animation is made
