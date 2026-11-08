@@ -35,6 +35,7 @@ function gearW(p) {
 
 // Build proportions: a stocky, well-muscled infantryman in body armour.
 export const BUILD = { torsoW: 1.12, torsoD: 1.10, leg: 1.14, arm: 1.16, hand: 1.08, boot: 1.08, head: 1.03 };
+export const HEAD_SCALE = 1.10; // face/skull size (not the helmet)
 export const HEAD_DROP = 0.037; // short, thick neck (head modelled 3.7 cm lower than the original design)
 
 export function buildSoldierGeometry() {
@@ -91,28 +92,31 @@ function buildTorso(B) {
 function buildHeadAndHelmet(B) {
   const H = w1('Head');
   const c = V(0, 1.665, 0.012);
+  // face and skull are built separately and scaled up as a unit (the helmet keeps its size)
+  const F = new MeshBuilder();
   // skull / face
-  B.ellipsoid(c, [0.078, 0.102, 0.094], 'skin', H, { w: 10, h: 7 });
+  F.ellipsoid(c, [0.078, 0.102, 0.094], 'skin', H, { w: 10, h: 7 });
   // jaw / chin
-  B.box(V(0, 1.598, 0.050), [0.090, 0.050, 0.075], 'skin', H, { taperBottom: [0.72, 0.8] });
-  B.box(V(0, 1.586, 0.088), [0.050, 0.030, 0.020], 'skinShade', H);
+  F.box(V(0, 1.598, 0.050), [0.090, 0.050, 0.075], 'skin', H, { taperBottom: [0.72, 0.8] });
+  F.box(V(0, 1.586, 0.088), [0.050, 0.030, 0.020], 'skinShade', H);
   // nose
   const nb = V(0, 1.668, 0.100);
-  B.poly([V(-0.014, 1.652, 0.098), V(0.014, 1.652, 0.098), V(0, 1.660, 0.122)], 'skinShade', H);
-  B.poly([V(0, 1.690, 0.103), V(-0.014, 1.652, 0.098), V(0, 1.660, 0.122)], 'skin', H);
-  B.poly([V(0, 1.690, 0.103), V(0, 1.660, 0.122), V(0.014, 1.652, 0.098)], 'skin', H);
+  F.poly([V(-0.014, 1.652, 0.098), V(0.014, 1.652, 0.098), V(0, 1.660, 0.122)], 'skinShade', H);
+  F.poly([V(0, 1.690, 0.103), V(-0.014, 1.652, 0.098), V(0, 1.660, 0.122)], 'skin', H);
+  F.poly([V(0, 1.690, 0.103), V(0, 1.660, 0.122), V(0.014, 1.652, 0.098)], 'skin', H);
   void nb;
   // mouth
-  B.box(V(0, 1.623, 0.096), [0.034, 0.005, 0.006], 'lip', H);
+  F.box(V(0, 1.623, 0.096), [0.034, 0.005, 0.006], 'lip', H);
   // ears
-  for (const s of [-1, 1]) B.box(V(0.079 * s, 1.665, 0.0), [0.016, 0.045, 0.03], 'skinShade', H);
+  for (const s of [-1, 1]) F.box(V(0.079 * s, 1.665, 0.0), [0.016, 0.045, 0.03], 'skinShade', H);
   // ballistic glasses
-  for (const s of [-1, 1]) B.box(V(0.032 * s, 1.684, 0.098), [0.044, 0.024, 0.008], 'black', H, { quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.18 * s, 0)) });
-  B.box(V(0, 1.690, 0.104), [0.016, 0.008, 0.006], 'black', H);
-  for (const s of [-1, 1]) B.box(V(0.074 * s, 1.688, 0.05), [0.006, 0.006, 0.09], 'black', H);
+  for (const s of [-1, 1]) F.box(V(0.032 * s, 1.684, 0.098), [0.044, 0.024, 0.008], 'black', H, { quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.18 * s, 0)) });
+  F.box(V(0, 1.690, 0.104), [0.016, 0.008, 0.006], 'black', H);
+  for (const s of [-1, 1]) F.box(V(0.074 * s, 1.688, 0.05), [0.006, 0.006, 0.09], 'black', H);
   // stubble / jaw shade sides
-  for (const s of [-1, 1]) B.box(V(0.052 * s, 1.612, 0.04), [0.016, 0.04, 0.06], 'skinShade', H);
+  for (const s of [-1, 1]) F.box(V(0.052 * s, 1.612, 0.04), [0.016, 0.04, 0.06], 'skinShade', H);
 
+  B.append(F, (p) => p.sub(c).multiplyScalar(HEAD_SCALE).add(c));
   // helmet shell (high-cut): dome rings
   const hc = V(0, 1.690, 0.004);
   const rx = 0.112, ry = 0.112, rz = 0.124;

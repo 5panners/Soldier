@@ -62,8 +62,9 @@ export const BIND_LOCAL = Object.fromEntries(
 );
 
 // Right eye, relative to the Head bone (bind axes). Used to align the sight line.
-export const RIGHT_EYE_LOCAL = v(-0.033, 0.083, 0.097);
-export const LEFT_EYE_LOCAL = v(0.033, 0.083, 0.097);
+// (face scaled 1.10 about its centre, then the whole head group 1.03 and lowered onto the short neck)
+export const RIGHT_EYE_LOCAL = v(-0.0363, 0.0834, 0.1053);
+export const LEFT_EYE_LOCAL = v(0.0363, 0.0834, 0.1053);
 
 // Shoulder pocket (where the rifle butt seats), in RightShoulder (clavicle) space.
 // Bind world ≈ (-0.14, 1.435, 0.085): between the plate carrier edge and the deltoid.
