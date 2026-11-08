@@ -129,7 +129,7 @@ export const GAITS = {
   },
   run: {
     // ~4.3 m/s combat run: 1.5 m steps at ~171 steps/min, ~0.2 s ground contact
-    T: 0.70, v: 4.3, stance: 0.28, heelRock: 0.045, heelOff: 0.12, zHS: 0.27, footX: 0.075, toeOut: deg(5),
+    T: 0.70, v: 4.3, stance: 0.28, heelRock: 0.045, heelOff: 0.12, zHS: 0.22, footX: 0.075, toeOut: deg(5),
     hsPitch: deg(10), toePitch: deg(42), heelRisePow: 1.3, lift: 0.34, liftSkew: 0.55, kickBack: -0.26,
     swingInset: 0.008, landVy: 0.7, pitchEase: 2.0, swingPitchBias: deg(-8), swingToe: deg(4),
     hips: (p) => ({
@@ -166,8 +166,10 @@ export const GAITS = {
 for (const g of Object.values(GAITS)) g.L = g.v * g.T;
 
 function hipsReachBound(hipsPos, hipsQ, feet) {
+  // only feet on the ground limit the pelvis height; a swinging leg simply bends or reaches
   let bound = Infinity;
   for (const s of ['Left', 'Right']) {
+    if (feet[s].planted === false) continue;
     const o = BIND_LOCAL[`${s}UpLeg`].clone().applyQuaternion(hipsQ);
     const a = feet[s].pos;
     const dx = hipsPos.x + o.x - a.x, dz = hipsPos.z + o.z - a.z;
@@ -196,6 +198,21 @@ function locomotion(name, g, upper, meta = {}) {
   ys = periodicSmooth(ys, 1.5);
   ys = ys.map((y, i) => Math.min(y, hipsReachBound(rows[i].h.pos, rows[i].quat, rows[i].feet) + 0.002));
   ys = periodicSmooth(ys, 0.8);
+  // a swinging foot reaching for the next contact may be a little beyond the extended leg:
+  // pull it back along the hip->foot line with a soft limit (no kink, no visible change)
+  const reachMax = (LEG_UPPER + LEG_LOWER) * 0.999, soft = 0.03;
+  rows.forEach((r, i) => {
+    const hp = V3(r.h.pos.x, ys[i], r.h.pos.z);
+    for (const s of ['Left', 'Right']) {
+      const f = r.feet[s];
+      if (f.planted) continue;
+      const j = BIND_LOCAL[`${s}UpLeg`].clone().applyQuaternion(r.quat).add(hp);
+      const d = f.pos.distanceTo(j), knee = reachMax - soft;
+      if (d <= knee) continue;
+      const x = d - knee, lim = knee + soft * (1 - Math.exp(-x / soft));
+      f.pos = j.clone().add(f.pos.clone().sub(j).multiplyScalar(lim / d));
+    }
+  });
   const acc = secondDerivative(ys, DT, true);
   const lag = periodicSpring(acc, DT, g.lag.freq, g.lag.zeta).map((x) => x * g.lag.gain);
   let lagX = rows.map(() => 0);
