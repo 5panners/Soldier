@@ -14,9 +14,10 @@
 
 import * as THREE from 'three';
 import { V3, qEuler, deg, qPow, localPoint } from './solver.js';
-import { SHOULDER_POCKET_LOCAL, UNDERARM_TUCK_LOCAL, RIGHT_EYE_LOCAL, BIND_LOCAL, ANKLE_HEIGHT } from './skeleton.js';
+import { SHOULDER_POCKET_LOCAL, UNDERARM_TUCK_LOCAL, RIGHT_EYE_LOCAL, BIND_LOCAL, ANKLE_HEIGHT, BIND_WORLD } from './skeleton.js';
 import { WEAPON, rightGrip, leftGrip } from './weapon.js';
 import { PoseSolver } from './solver.js';
+import { CALIB_CACHE } from './calib-cache.js';
 
 const G = 9.81;
 const TAU = Math.PI * 2;
@@ -162,6 +163,7 @@ export const GRIPS = {
   leftFar: leftGrip(0.355, 'cup'),
   leftNear: leftGrip(0.27, 'cup'),
   leftLow: leftGrip(0.235, 'cup'),
+  leftProne: leftGrip(0.215, 'cup'),
 };
 
 const FINGERS_R = {
@@ -219,18 +221,37 @@ export const COMBAT_FEET = {
 };
 const KNEE_POLE = (yaw, out) => V3(Math.sin(yaw) + out, 0, Math.cos(yaw)).normalize();
 
-function standingBase(o) {
+function standingBase(o) { // o: stance with optional feet/kneePole
   return {
     hips: { pos: o.hipsPos.clone(), quat: o.hipsQ.clone() },
     chest: o.chestQ.clone(),
     spineDist: [0.27, 0.34, 0.39],
-    feet: {
-      Left: { ...COMBAT_FEET.Left, pos: COMBAT_FEET.Left.pos.clone() },
-      Right: { ...COMBAT_FEET.Right, pos: COMBAT_FEET.Right.pos.clone() },
-    },
-    kneePole: { Left: KNEE_POLE(deg(4), 0.12), Right: KNEE_POLE(deg(-30), -0.10) },
+    feet: cloneFeet(o.feet || COMBAT_FEET),
+    kneePole: o.kneePole || { Left: KNEE_POLE(deg(4), 0.12), Right: KNEE_POLE(deg(-30), -0.10) },
   };
 }
+export const cloneFeet = (f) => ({
+  Left: { pos: f.Left.pos.clone(), quat: f.Left.quat.clone(), toe: f.Left.toe || 0 },
+  Right: { pos: f.Right.pos.clone(), quat: f.Right.quat.clone(), toe: f.Right.toe || 0 },
+});
+
+/** Foot orientation from a toe direction and a 'top of foot' direction (world). */
+export function footBasis(toe, top) {
+  const z = toe.clone().normalize();
+  const y = top.clone().addScaledVector(z, -top.dot(z)).normalize();
+  const x = new THREE.Vector3().crossVectors(y, z);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+}
+
+// Crouch: left foot flat and forward, right foot back on the ball with the heel up.
+export const CROUCH_FEET = (() => {
+  const L = { pos: V3(0.135, ANKLE_HEIGHT, 0.21), quat: footQuat(0, deg(10)), toe: 0 };
+  const yawR = deg(-18);
+  const ball = V3(-0.165, 0, -0.30);
+  const r = footFromPivot(ball, BALL_LOCAL, -deg(48), yawR);
+  return { Left: L, Right: { pos: r.pos, quat: r.quat, toe: deg(44) } };
+})();
+export const CROUCH_KNEES = { Left: V3(0.25, 0.1, 1).normalize(), Right: V3(-0.2, -0.35, 1).normalize() };
 
 /** The three base upper-body modes, each with its own reference stance. */
 export const STANCES = {
@@ -238,7 +259,7 @@ export const STANCES = {
     hipsPos: V3(-0.012, 0.938, -0.005), hipsQ: qEuler(deg(4), deg(-14), 0),
     chestQ: qEuler(deg(8), deg(-12), deg(1)),
     head: qEuler(deg(7), deg(2), 0),
-    clavicle: { Left: clav('Left', 2, 18), Right: clav('Right', 2, 2) },
+    clavicle: { Left: clav('Left', 2, 26), Right: clav('Right', 2, 2) },
     mode: {
       anchor: 'pocket', contact: WEAPON.BUTT.clone().add(V3(0, 0.01, 0.02)),
       rel: qEuler(deg(30), deg(22), deg(-12)), offset: V3(0.0, -0.025, 0.02),
@@ -259,8 +280,8 @@ export const STANCES = {
     trigger: 1,
   },
   ads: {
-    hipsPos: V3(-0.02, 0.915, 0.0), hipsQ: qEuler(deg(8), deg(-28), 0),
-    chestQ: qEuler(deg(10), deg(-25), deg(1)),
+    hipsPos: V3(-0.02, 0.915, -0.02), hipsQ: qEuler(deg(11), deg(-32), 0),
+    chestQ: qEuler(deg(19), deg(-30), deg(1)),
     head: null, // calibrated so the right eye sits on the sight line
     clavicle: { Left: clav('Left', 3, 18), Right: null },
     mode: null, // computed: butt in pocket, aimed at world forward
@@ -269,13 +290,37 @@ export const STANCES = {
     elbowPole: { Left: V3(0.25, -1, 0.05), Right: V3(-0.85, -0.75, -0.15) },
     trigger: 1,
   },
+  crouch: {
+    hipsPos: V3(-0.02, 0.60, -0.05), hipsQ: qEuler(deg(20), deg(-14), deg(-2)),
+    chestQ: qEuler(deg(24), deg(-12), deg(1)),
+    head: qEuler(deg(4), deg(2), 0),
+    clavicle: { Left: clav('Left', 2, 26), Right: clav('Right', 2, 2) },
+    mode: null, // = lowReady carry
+    leftGrip: GRIPS.leftLow,
+    elbowPole: { Left: V3(0.35, -1, -0.25), Right: V3(-0.55, -1, -0.45) },
+    trigger: 0,
+    feet: CROUCH_FEET, kneePole: CROUCH_KNEES,
+  },
+  crouchAds: {
+    hipsPos: V3(-0.02, 0.62, -0.06), hipsQ: qEuler(deg(18), deg(-30), deg(-2)),
+    chestQ: qEuler(deg(20), deg(-30), deg(1)),
+    head: null,
+    clavicle: { Left: clav('Left', 3, 18), Right: null },
+    mode: null,
+    aim: { yaw: 0, pitch: 0 },
+    leftGrip: GRIPS.leftAds,
+    elbowPole: { Left: V3(0.25, -1, 0.05), Right: V3(-0.85, -0.75, -0.15) },
+    trigger: 1,
+    feet: CROUCH_FEET, kneePole: CROUCH_KNEES,
+  },
+  prone: null, // built in calibrate() (needs foot helpers)
 };
 
 const solver = new PoseSolver();
 
 /** Build the solver spec for a standing stance. */
 export function stanceSpec(st, overrides = {}) {
-  const base = standingBase(st);
+  const base = standingBase({ ...st, feet: st.feet, kneePole: st.kneePole });
   const mode = st.mode;
   const spec = {
     ...base,
@@ -334,74 +379,141 @@ export function eyeInWeapon(res) {
 }
 
 let calibrated = false;
+const pen = (v, lo, hi) => (v < lo ? (lo - v) ** 2 : v > hi ? (v - hi) ** 2 : 0);
+
 /**
- * Calibrate ADS and hip-fire stances:
- *  - ADS: butt seated in the shoulder pocket, barrel at world forward, then solve
- *    head/neck orientation + clavicle elevation so the RIGHT EYE lies exactly on
- *    the optic's sight line (cheek weld) with a sensible eye relief.
- *  - Hip: stock clamped under the right arm, barrel level at world forward.
+ * Solve a cheek weld for an aiming stance: with the butt seated in the shoulder
+ * pocket and the barrel at the stance's world aim, find neck/head orientation,
+ * clavicle elevation/protraction and butt height so the RIGHT EYE lies on the
+ * optic's sight line, inside comfortable joint ranges (degrees).
+ * x = [neckPitch, neckRoll, neckYaw, headPitch, headYaw, headRoll, clavElev, clavProtract, buttUp]
  */
-export function calibrate() {
-  if (calibrated) return STANCES;
-  const ads = STANCES.ads;
-  const relAim = relForWorldAim(ads.chestQ, ads.aim.yaw, ads.aim.pitch, 0);
-  const pen = (v, lo, hi) => (v < lo ? (lo - v) ** 2 : v > hi ? (v - hi) ** 2 : 0);
-  // x = [neckPitch, neckRoll, neckYaw, headPitch, headYaw, headRoll, clavElev, clavProtract, buttUp]
+export function calibrateAim(st, cfg) {
+  const relAim = relForWorldAim(st.chestQ, st.aim.yaw, st.aim.pitch, 0);
+  const B = cfg.bounds;
+  const key = cacheKey(st, cfg);
   const unpack = (x) => {
     const [np, nr, ny, hp, hy, hr, elev, prot, buttUp] = x;
     return {
-      ...ads,
+      ...st,
       neckLocal: qEuler(np, ny, nr),
       headLocal: qEuler(hp, hy, hr),
-      clavicle: { Left: ads.clavicle.Left, Right: clav('Right', elev, prot) },
+      clavicle: { Left: st.clavicle.Left, Right: clav('Right', elev, prot) },
       mode: { anchor: 'pocket', contact: WEAPON.BUTT.clone().add(V3(0, -buttUp, 0.004)), rel: relAim.clone() },
     };
   };
-  const evalAds = (x) => {
+  const evalAim = (x) => {
     const [np, nr, ny, hp, hy, hr, elev, prot, buttUp] = x;
-    const st = unpack(x);
-    const res = solver.solve(stanceSpec(st));
+    const res = solver.solve(stanceSpec(unpack(x)));
     const e = eyeInWeapon(res);
     const perp2 = e.x * e.x + (e.y - WEAPON.SIGHT_Y) * (e.y - WEAPON.SIGHT_Y);
-    const relief = pen(e.z, -0.25, -0.13);
-    // gaze: head forward axis should look down the barrel
+    const relief = pen(e.z, -0.25, -0.12);
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(res.world.Head.quat);
     const wf = new THREE.Vector3(0, 0, 1).applyQuaternion(res.weapon.quat);
     const gaze = 1 - fwd.dot(wf);
-    // anatomical comfort ranges (radians / degrees for clavicle)
-    const comfort = pen(np, deg(0), deg(42)) + pen(nr, deg(-4), deg(14)) + pen(ny, deg(-10), deg(25))
-      + pen(hp, deg(-25), deg(22)) + pen(hy, deg(-10), deg(20)) + pen(hr, deg(-4), deg(14))
-      + 1e-4 * (pen(elev, 0, 26) + pen(prot, -6, 16)) + 0.5 * pen(buttUp, -0.01, 0.035);
-    const reg = 0.004 * (np * np + hp * hp) + 0.01 * (nr * nr + ny * ny + hy * hy + hr * hr) + 1e-6 * (elev * elev + prot * prot) + 0.2 * buttUp * buttUp;
+    const D = (k, v) => pen(v, deg(B[k][0]), deg(B[k][1]));
+    const comfort = D('np', np) + D('nr', nr) + D('ny', ny) + D('hp', hp) + D('hy', hy) + D('hr', hr)
+      + 1e-4 * (pen(elev, B.elev[0], B.elev[1]) + pen(prot, B.prot[0], B.prot[1])) + 0.5 * pen(buttUp, -0.01, 0.035);
+    const c0 = cfg.centre || {};
+    const reg = 0.004 * ((np - (c0.np || 0)) ** 2 + hp * hp) + 0.012 * (nr * nr + ny * ny + hy * hy + hr * hr)
+      + 1e-6 * (elev * elev + prot * prot) + 0.2 * buttUp * buttUp;
     const reach = (res.handErr.Left + res.handErr.Right) * 80;
     return 6000 * perp2 + 40 * relief + 0.3 * gaze + 80 * comfort + reg + reach;
   };
   let best = null;
-  for (const start of [
-    [deg(30), deg(6), deg(10), deg(-5), deg(5), deg(8), 18, 4, 0.025],
-    [deg(36), deg(10), deg(15), deg(-12), deg(0), deg(4), 22, 0, 0.03],
-    [deg(24), deg(4), deg(5), deg(4), deg(8), deg(10), 14, 8, 0.02],
-  ]) {
-    let r = nelderMead(evalAds, start, [deg(6), deg(4), deg(5), deg(6), deg(5), deg(5), 4, 4, 0.008], 1500);
-    r = nelderMead(evalAds, r.x, [deg(2), deg(2), deg(2), deg(2), deg(2), deg(2), 1.5, 1.5, 0.003], 1500);
+  const cached = CALIB_CACHE[cfg.name];
+  if (cached && cached.key === key) best = { x: cached.x, f: cached.f };
+  else for (const start of cfg.starts) {
+    const x0 = start.map((v, i) => (i < 6 ? deg(v) : v));
+    let r = nelderMead(evalAim, x0, [deg(6), deg(4), deg(5), deg(6), deg(5), deg(5), 4, 4, 0.008], 1500);
+    r = nelderMead(evalAim, r.x, [deg(2), deg(2), deg(2), deg(2), deg(2), deg(2), 1.5, 1.5, 0.003], 1500);
     if (!best || r.f < best.f) best = r;
   }
-  const st = unpack(best.x);
-  ads.neckLocal = st.neckLocal;
-  ads.headLocal = st.headLocal;
+  const out = unpack(best.x);
+  st.neckLocal = out.neckLocal;
+  st.headLocal = out.headLocal;
+  st.clavicle = out.clavicle;
+  st.mode = out.mode;
   const k = ['neckPitch', 'neckRoll', 'neckYaw', 'headPitch', 'headYaw', 'headRoll', 'elev', 'prot', 'buttUp'];
-  ads.calib = Object.fromEntries(k.map((n, i) => [n, best.x[i]]));
-  ads.calib.cost = best.f;
-  ads.clavicle = st.clavicle;
-  ads.mode = st.mode;
+  st.calib = Object.fromEntries(k.map((n, i) => [n, best.x[i]]));
+  st.calib.cost = best.f;
+  CALIB_RESULTS[cfg.name] = { key, x: best.x, f: best.f };
+  return st;
+}
+
+// Solved cheek welds are cached (src/calib-cache.js, written by `npm run calibrate`); the cache
+// entry is only used when the stance, bounds and skeleton it was solved for are unchanged.
+export const CALIB_RESULTS = {};
+function cacheKey(st, cfg) {
+  const r = (v) => (typeof v === 'number' ? Math.round(v * 1e5) / 1e5 : v);
+  const flat = JSON.stringify({ st: [st.hipsPos, st.hipsQ, st.chestQ, st.clavicle.Left, st.aim, st.leftGrip, st.elbowPole, st.feet, st.kneePole],
+    cfg: [cfg.bounds, cfg.starts, cfg.centre], skel: BIND_WORLD, w: [WEAPON.BUTT, WEAPON.SIGHT_Y], pocket: SHOULDER_POCKET_LOCAL, eye: RIGHT_EYE_LOCAL }, (k, v) => r(v));
+  let h = 5381;
+  for (let i = 0; i < flat.length; i++) h = ((h * 33) ^ flat.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
+/** Prone firing position (FM 3-22.9): body angled left of the line of fire, legs spread, firing-side knee drawn up. */
+function buildProne() {
+  const yaw = deg(-14);
+  const hipsPos = V3(0.06, 0.135, -0.52);
+  const hipsQ = qEuler(deg(86), yaw, deg(3));
+  const chestQ = qEuler(deg(52), deg(-9), deg(2));
+  const fwd = V3(Math.sin(yaw), 0, Math.cos(yaw)), back = fwd.clone().negate();
+  const left = V3(Math.cos(yaw), 0, -Math.sin(yaw));
+  const down = V3(0, -1, 0);
+  const hip = (s) => BIND_LOCAL[`${s}UpLeg`].clone().applyQuaternion(hipsQ).add(hipsPos);
+  const lAnk = hip('Left').addScaledVector(back, 0.77).addScaledVector(left, 0.16); lAnk.y = 0.125;
+  const rAnk = hip('Right').addScaledVector(back, 0.58).addScaledVector(left, -0.34); rAnk.y = 0.10;
+  const feet = {
+    Left: { pos: lAnk, quat: footBasis(down.clone().multiplyScalar(0.75).addScaledVector(back, 0.55).addScaledVector(left, 0.25), back.clone().addScaledVector(left, 0.3)), toe: deg(25) },
+    Right: { pos: rAnk, quat: footBasis(back.clone().multiplyScalar(0.7).addScaledVector(left, -0.45).addScaledVector(down, 0.45), left.clone().negate().addScaledVector(down, 0.6)), toe: deg(10) },
+  };
+  const kneePole = {
+    Left: down.clone().addScaledVector(left, 0.25).normalize(),
+    Right: left.clone().negate().addScaledVector(fwd, 0.7).addScaledVector(down, 0.5).normalize(),
+  };
+  const inv = chestQ.clone().invert();
+  return {
+    hipsPos, hipsQ, chestQ, head: null,
+    clavicle: { Left: clav('Left', 6, 24), Right: null },
+    mode: null, aim: { yaw: 0, pitch: 0 },
+    leftGrip: GRIPS.leftProne,
+    elbowPole: { Left: V3(0.25, -1, 0.15).applyQuaternion(inv), Right: V3(-0.7, -1, -0.1).applyQuaternion(inv) },
+    trigger: 1, feet, kneePole, prone: true,
+  };
+}
+
+/**
+ * Calibrate every stance:
+ *  - ADS (standing, crouched, prone): solved cheek weld (see calibrateAim).
+ *  - Hip: stock clamped under the right arm, barrel level at world forward.
+ *  - Carry stances: explicit neck/head locals so any two stances can be blended.
+ */
+export function calibrate() {
+  if (calibrated) return STANCES;
+  const standing = {
+    np: [0, 38], nr: [-4, 14], ny: [-10, 25], hp: [-22, 16], hy: [-10, 25], hr: [-4, 14], elev: [0, 26], prot: [-6, 16],
+  };
+  const starts = [[24, 6, 8, -8, 8, 6, 16, 4, 0.025], [30, 8, 12, -14, 4, 4, 20, 0, 0.03], [18, 4, 4, 0, 10, 8, 12, 8, 0.02]];
+  calibrateAim(STANCES.ads, { name: 'ads', bounds: standing, starts });
+  calibrateAim(STANCES.crouchAds, { name: 'crouchAds', bounds: standing, starts });
+  STANCES.prone = buildProne();
+  calibrateAim(STANCES.prone, {
+    name: 'prone',
+    bounds: { np: [-60, 30], nr: [-8, 14], ny: [-20, 25], hp: [-45, 15], hy: [-15, 25], hr: [-6, 14], elev: [0, 30], prot: [-10, 20] },
+    starts: [[-40, 4, 8, -20, 6, 6, 16, 4, 0.02], [-55, 8, 4, -10, 10, 4, 20, 0, 0.03], [-30, 0, 12, -30, 0, 8, 10, 8, 0.01]],
+    centre: { np: deg(-45) },
+  });
 
   const hip = STANCES.hip;
   hip.mode = {
     anchor: 'tuck', contact: V3(0, 0.072, -0.215),
     rel: relForWorldAim(hip.chestQ, hip.aim.yaw, hip.aim.pitch, deg(-4)),
   };
-  // explicit cervical locals for the other stances (so every stance can be blended)
-  for (const st of [STANCES.lowReady, hip]) {
+  STANCES.crouch.mode = STANCES.lowReady.mode;
+  // explicit cervical locals for the carry stances (so every stance can be blended)
+  for (const st of [STANCES.lowReady, hip, STANCES.crouch]) {
     const hd = st.chestQ.clone().invert().multiply(st.head);
     st.neckLocal = qPow(hd, 0.45);
     st.headLocal = qPow(hd, 0.45).invert().multiply(hd);

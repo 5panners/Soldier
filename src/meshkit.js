@@ -253,6 +253,17 @@ export class MeshBuilder {
     this.loft(rings, color, typeof weights === 'function' ? weights : [weights, weights], { capStart: caps, capEnd: caps });
   }
 
+  /** Append another builder's triangles, transforming positions with xf(Vector3) (in place). */
+  append(o, xf = null) {
+    const v = new THREE.Vector3();
+    for (let i = 0; i < o.pos.length; i += 3) {
+      v.set(o.pos[i], o.pos[i + 1], o.pos[i + 2]);
+      if (xf) xf(v);
+      this.pos.push(v.x, v.y, v.z);
+    }
+    this.uv.push(...o.uv); this.si.push(...o.si); this.sw.push(...o.sw);
+  }
+
   build() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));

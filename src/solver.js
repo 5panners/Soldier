@@ -144,7 +144,7 @@ export class PoseSolver {
     L.HeadTop_End.identity(); setWorld('HeadTop_End');
 
     // ---- weapon placement
-    const weapon = spec.weapon ? spec.weapon({ W, spec }) : null;
+    let weapon = spec.weapon && !spec.cradle ? spec.weapon({ W, spec }) : null;
 
     // ---- legs
     const reach = {};
@@ -170,46 +170,79 @@ export class PoseSolver {
 
     // ---- arms
     const handErr = {};
-    for (const s of ['Left', 'Right']) {
+    const solveArm = (s, handT, elbowTarget) => {
       setWorld(`${s}Arm`);
       const root = W[`${s}Arm`].pos;
-      let handT;
-      if (weapon && spec.grips && spec.grips[s] && !(s === 'Left' && spec.leftOff)) {
-        const g = spec.grips[s];
-        handT = {
-          pos: g.pos.clone().applyQuaternion(weapon.quat).add(weapon.pos),
-          quat: weapon.quat.clone().multiply(g.quat),
-        };
-      } else if (spec.freeHand && spec.freeHand[s]) {
-        handT = spec.freeHand[s](W, weapon);
-      } else {
-        handT = null;
-      }
-      if (spec.handBlend && spec.handBlend[s] && handT) {
-        // blend between free-hand target and grip target (for hand-off transitions)
-        const alt = spec.freeHand[s](W, weapon);
-        const t = spec.handBlend[s];
-        handT = { pos: handT.pos.clone().lerp(alt.pos, t), quat: handT.quat.clone().slerp(alt.quat, t) };
-      }
       const l1 = LEN(`${s}Arm`), l2 = LEN(`${s}ForeArm`);
       if (!handT) { // relaxed arm hanging
         handT = { pos: root.clone().add(new THREE.Vector3(0, -(l1 + l2) * 0.97, 0.05)), quat: W.Spine2.quat.clone() };
       }
-      const pole = (spec.elbowPole && spec.elbowPole[s]) || new THREE.Vector3(0, -0.5, -1);
-      const ik = twoBoneIK(root, handT.pos, l1, l2, pole);
-      handErr[s] = ik.reachError;
+      let mid, end, pp;
+      if (elbowTarget) {
+        // elbow placed toward a target (e.g. planted on the ground), forearm aimed at the hand target
+        mid = root.clone().add(elbowTarget.clone().sub(root).normalize().multiplyScalar(l1));
+        end = mid.clone().add(handT.pos.clone().sub(mid).normalize().multiplyScalar(l2));
+        const line = end.clone().sub(root).normalize();
+        pp = mid.clone().sub(root).addScaledVector(line, -mid.clone().sub(root).dot(line));
+        if (pp.lengthSq() < 1e-10) pp.set(0, -1, 0); pp.normalize();
+        handErr[s] = end.distanceTo(handT.pos);
+      } else {
+        const pole = (spec.elbowPole && spec.elbowPole[s]) || new THREE.Vector3(0, -0.5, -1);
+        const ik = twoBoneIK(root, handT.pos, l1, l2, pole);
+        mid = ik.mid; end = ik.end; pp = ik.pp;
+        handErr[s] = ik.reachError;
+      }
       const bindPole = new THREE.Vector3(0, 0, -1);
-      const upQ = frameRotation(bindDir(`${s}Arm`), bindPole, ik.mid.clone().sub(root), ik.pp);
+      const upQ = frameRotation(bindDir(`${s}Arm`), bindPole, mid.clone().sub(root), pp);
       setLocalFromWorld(`${s}Arm`, upQ);
-      let foreQ = frameRotation(bindDir(`${s}ForeArm`), bindPole, ik.end.clone().sub(ik.mid), ik.pp);
+      let foreQ = frameRotation(bindDir(`${s}ForeArm`), bindPole, end.clone().sub(mid), pp);
       // distribute forearm twist (pronation/supination) between forearm and wrist
       const handLocal = foreQ.clone().invert().multiply(handT.quat);
-      const axis = bindDir(`${s}ForeArm`);
-      const tw = twistAbout(handLocal, axis);
+      const tw = twistAbout(handLocal, bindDir(`${s}ForeArm`));
       foreQ = foreQ.multiply(qPow(tw, spec.twistShare ?? 0.6));
       setLocalFromWorld(`${s}ForeArm`, foreQ);
       setLocalFromWorld(`${s}Hand`, handT.quat);
+    };
+    const gripTarget = (s, g) => ({
+      pos: g.pos.clone().applyQuaternion(weapon.quat).add(weapon.pos),
+      quat: weapon.quat.clone().multiply(g.quat),
+    });
+    let order = ['Left', 'Right'];
+    if (spec.cradle) {
+      // Crawling: right forearm planted -> right hand -> weapon follows the hand; left hand
+      // slides along the handguard to wherever its planted forearm reaches.
+      const c = spec.cradle;
+      solveArm('Right', c.rightHand, c.elbow.Right);
+      handErr.Right = 0; // the rifle is placed from wherever the right hand ends up
+      const hw = W.RightHand;
+      const gi = new THREE.Matrix4().compose(spec.grips.Right.pos, spec.grips.Right.quat, new THREE.Vector3(1, 1, 1)).invert();
+      const m = new THREE.Matrix4().compose(hw.pos, hw.quat, new THREE.Vector3(1, 1, 1)).multiply(gi);
+      weapon = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
+      m.decompose(weapon.pos, weapon.quat, new THREE.Vector3());
+      setWorld('LeftArm');
+      const l1 = LEN('LeftArm'), l2 = LEN('LeftForeArm');
+      const e = W.LeftArm.pos.clone().add(c.elbow.Left.clone().sub(W.LeftArm.pos).normalize().multiplyScalar(l1));
+      let bestZ = 0.3, bestD = Infinity;
+      for (let z = 0.16; z <= 0.46; z += 0.005) {
+        const gp = gripTarget('Left', c.leftGrip(z)).pos;
+        const d = 0.3 * Math.abs(gp.distanceTo(e) - l2) + 3 * Math.max(0, gp.distanceTo(W.LeftArm.pos) - (l1 + l2) * 0.97);
+        if (d < bestD) { bestD = d; bestZ = z; }
+      }
+      // hand stays on the handguard; the elbow is pulled toward its planted target
+      const saved = spec.elbowPole;
+      spec.elbowPole = { ...(saved || {}), Left: c.elbow.Left.clone().sub(W.LeftArm.pos) };
+      solveArm('Left', gripTarget('Left', c.leftGrip(bestZ)), null);
+      spec.elbowPole = saved;
+      order = [];
+    }
+    for (const s of order) {
+      let handT = null;
+      if (weapon && spec.grips && spec.grips[s] && !(s === 'Left' && spec.leftOff)) handT = gripTarget(s, spec.grips[s]);
+      else if (spec.freeHand && spec.freeHand[s]) handT = spec.freeHand[s](W, weapon);
+      solveArm(s, handT, spec.elbowTarget && spec.elbowTarget[s]);
+    }
 
+    for (const s of ['Left', 'Right']) {
       // fingers
       const F = (spec.fingers && spec.fingers[s]) || {};
       const palm = new THREE.Vector3(0, -1, 0);

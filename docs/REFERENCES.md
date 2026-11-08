@@ -34,3 +34,13 @@ The animations are procedurally authored, not motion captured. Their timing, joi
   * ADS: butt seated in the shoulder pocket; right eye solved onto the sight line; raised firing shoulder and elbow; support hand under the handguard; bladed stance with the left foot forward.
   * Trigger discipline: the index finger stays straight outside the guard except when firing.
   * Hip fire: the stock is clamped under the firing arm.
+
+## Prone, crouch and crawl
+* Prone firing position follows FM 3-22.9 (linked above):
+  * The body is angled to the left of the line of fire, with the firing-side knee drawn up.
+  * The elbows support the rifle, and the butt sits in the shoulder pocket.
+* High crawl follows the individual movement techniques in FM 3-21.75 *The Warrior Ethos and Soldier Combat Skills*:
+  * The body is off the ground, with the weight on the forearms and lower legs.
+  * The rifle is cradled in the arms with the muzzle off the ground.
+  * The right elbow and left knee advance together, then the other pair.
+* Used in `buildProne()` (`src/motion.js`) and `crawlClip()` (`src/clips.js`).

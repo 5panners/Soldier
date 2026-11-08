@@ -25,8 +25,9 @@ const def = buildClipLibrary().find((d) => d.name === name);
 const { clip } = bakeClip(def);
 const mixer = new THREE.AnimationMixer(S.group); const act = mixer.clipAction(clip); act.play();
 const cams = { side: [[-3.0, 1.0, 0.25], [0, 0.95, 0.25]], front: [[0, 1.1, 3.2], [0, 0.95, 0]], three: [[-2.1, 1.4, 2.2], [0, 1.0, 0.15]],
-  upper: [[-1.6, 1.5, 0.9], [0, 1.3, 0.3]], left: [[3.0, 1.0, 0.25], [0, 0.95, 0.25]], feet: [[-1.6, 0.4, 0.4], [0, 0.25, 0.1]] };
-const [cp, ct] = cams[P.get('cam') || 'side'];
+  upper: [[-1.6, 1.5, 0.9], [0, 1.3, 0.3]], left: [[3.0, 1.0, 0.25], [0, 0.95, 0.25]], feet: [[-1.6, 0.4, 0.4], [0, 0.25, 0.1]],
+  pside: [[-3.2, 0.9, -0.35], [0, 0.35, -0.35]], pthree: [[-2.2, 1.5, 1.2], [0, 0.3, -0.4]] };
+const [cp, ct] = cams[P.get('cam')] || cams.side;
 const camera = new THREE.PerspectiveCamera(Number(P.get('fov') || 40), cw / ch, 0.01, 100);
 camera.position.set(...cp); camera.lookAt(...ct);
 const speed = clip.userData.speed || 0;

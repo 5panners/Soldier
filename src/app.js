@@ -119,7 +119,7 @@ for (const [n, c] of Object.entries(CLIPS)) {
 }
 // additive recoil layers (relative to the static stance pose)
 const additive = {};
-for (const [fire, ref] of [['ADS_Fire_Auto', 'ADS_Pose'], ['HipFire_Fire_Auto', 'HipFire_Pose']]) {
+for (const [fire, ref] of [['ADS_Fire_Auto', 'ADS_Pose'], ['HipFire_Fire_Auto', 'HipFire_Pose'], ['Crouch_ADS_Fire_Auto', 'Crouch_ADS_Pose'], ['Prone_Fire_Auto', 'Prone_Pose']]) {
   const c = THREE.AnimationUtils.makeClipAdditive(CLIPS[fire].clone(), 0, CLIPS[ref], 60);
   c.name = fire + '_Additive';
   const a = mixer.clipAction(c);
@@ -267,8 +267,10 @@ const GROUPS = [
   ['Locomotion', ['Idle', 'Walk', 'Run', 'ADS_Walk', 'HipFire_Walk']],
   ['Weapon', ['ADS_Idle', 'HipFire_Idle', 'ADS_Fire', 'ADS_Fire_Auto', 'HipFire_Fire', 'HipFire_Fire_Auto']],
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
+  ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
+  ['Prone', ['Prone_Idle', 'Prone_Fire', 'Prone_Fire_Auto', 'Prone_Crawl', 'Stand_To_Prone', 'Prone_To_Stand']],
   ['Jump', ['Jump', 'Jump_Start', 'Jump_Air', 'Jump_Land']],
-  ['Poses', ['Idle_Pose', 'ADS_Pose', 'HipFire_Pose']],
+  ['Poses', ['Idle_Pose', 'ADS_Pose', 'HipFire_Pose', 'Crouch_Pose', 'Crouch_ADS_Pose', 'Prone_Pose']],
 ];
 
 function play(name, fade = Number($('#fade').value)) {
@@ -338,6 +340,7 @@ function setMode(m) {
   controls.enabled = m === 'view';
   if (m === 'play') {
     sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
+    sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
     groundScroll = 0; gtex.offset.set(0, 0);
@@ -368,9 +371,11 @@ window.addEventListener('keydown', (e) => {
   if (mode !== 'play') return;
   if (['Space', 'Enter'].includes(e.code)) e.preventDefault(); // don't trigger focused UI buttons
   if (e.repeat) return;
-  if (e.code === 'Space' && !sim.jumping) startJump();
+  if (e.code === 'Space' && !sim.jumping && (sim.posture || 'stand') === 'stand' && !sim.postureClip) startJump();
   if (e.code === 'KeyV') sim.eye = !sim.eye;
   if (e.code === 'KeyH') sim.aim = sim.aim === 'hip' ? 'none' : 'hip';
+  if (e.code === 'KeyC') sim.wantPosture = (sim.posture || 'stand') === 'crouch' ? 'stand' : 'crouch';
+  if (e.code === 'KeyZ') sim.wantPosture = (sim.posture || 'stand') === 'prone' ? 'stand' : 'prone';
   if (e.code === 'Escape') setMode('view');
 });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -405,38 +410,74 @@ mixer.addEventListener('finished', (e) => {
 });
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+// one-shot posture changes (body locked until they finish)
+const POSTURE_T = {
+  'stand>crouch': 'Stand_To_Crouch', 'crouch>stand': 'Crouch_To_Stand',
+  'stand>prone': 'Stand_To_Prone', 'prone>stand': 'Prone_To_Stand',
+  'crouch>prone': 'Stand_To_Prone', 'prone>crouch': 'Prone_To_Stand',
+};
 function updatePlay(dt) {
   // desired movement in camera frame
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   const r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
   const moving = f !== 0 || r !== 0;
-  const run = (keys.ShiftLeft || keys.ShiftRight) && sim.aim === 'none' && f > 0;
-  const aimMode = sim.fire && sim.aim === 'none' ? 'hip' : sim.aim;
+  const posture = sim.posture || 'stand';
+  const run = (keys.ShiftLeft || keys.ShiftRight) && sim.aim === 'none' && f > 0 && posture === 'stand';
+  let aimMode = sim.fire && sim.aim === 'none' ? 'hip' : sim.aim;
+  if (posture !== 'stand' && aimMode === 'hip') aimMode = 'ads'; // crouched/prone fire from the shoulder
+  if (posture === 'prone') aimMode = 'ads';
   const moveYaw = sim.camYaw + Math.atan2(-r, f); // camera looks toward +Z at yaw 0
 
+  // posture transition in progress?
+  if (sim.postureClip) {
+    if (actions[sim.postureClip].isRunning()) { sim.speed *= Math.exp(-dt * 8); return; }
+    sim.postureClip = null;
+  }
+  if (sim.wantPosture && sim.wantPosture !== posture && !sim.jumping) {
+    let from = posture, to = sim.wantPosture;
+    if (from === 'crouch' && to === 'prone') from = 'stand';
+    const t = POSTURE_T[`${from}>${to}`];
+    sim.posture = to === 'crouch' && posture === 'prone' ? 'stand' : to;
+    sim.wantPosture = sim.posture === to ? null : to; // prone -> crouch goes through standing
+    sim.lastAim = 'none';
+    setBase(t, 0.15);
+    sim.postureClip = t;
+    return;
+  }
+
   let clip, speed = 0, timeScale = 1, lowerYaw = 0;
+  const P = { stand: { idle: 'Idle', walk: 'Walk', ads: 'ADS_Idle', adsWalk: 'ADS_Walk', hip: 'HipFire_Idle', hipWalk: 'HipFire_Walk' },
+    crouch: { idle: 'Crouch_Idle', walk: 'Crouch_Walk', ads: 'Crouch_ADS_Idle', adsWalk: 'Crouch_ADS_Walk', hip: 'Crouch_ADS_Idle', hipWalk: 'Crouch_ADS_Walk' },
+    prone: { idle: 'Prone_Idle', walk: 'Prone_Crawl', ads: 'Prone_Idle', adsWalk: 'Prone_Crawl', hip: 'Prone_Idle', hipWalk: 'Prone_Crawl' } }[posture];
   if (!sim.jumping) {
-    if (aimMode !== 'none') {
+    if (posture === 'prone') {
+      if (moving) {
+        sim.yaw = sim.yaw + wrapAngle(moveYaw - sim.yaw) * Math.min(1, dt * 2.5); // slow pivot on the elbows
+        clip = P.walk; speed = DEFS[clip].speed;
+      } else {
+        sim.yaw = sim.yaw + wrapAngle(sim.camYaw - sim.yaw) * Math.min(1, dt * 2.5);
+        clip = P.idle;
+      }
+    } else if (aimMode !== 'none') {
       sim.yaw = sim.yaw + wrapAngle(sim.camYaw - sim.yaw) * Math.min(1, dt * 14);
       if (moving) {
-        clip = aimMode === 'ads' ? 'ADS_Walk' : 'HipFire_Walk';
+        clip = aimMode === 'ads' ? P.adsWalk : P.hipWalk;
         let d = wrapAngle(moveYaw - sim.yaw);
         if (Math.abs(d) > deg(100)) { timeScale = -1; d = wrapAngle(d - Math.PI); } // backpedal
         lowerYaw = THREE.MathUtils.clamp(d, -deg(80), deg(80));
         speed = DEFS[clip].speed;
-      } else clip = aimMode === 'ads' ? 'ADS_Idle' : 'HipFire_Idle';
+      } else clip = aimMode === 'ads' ? P.ads : P.hip;
     } else if (moving) {
       sim.yaw = sim.yaw + wrapAngle(moveYaw - sim.yaw) * Math.min(1, dt * (run ? 6 : 8));
-      clip = run ? 'Run' : 'Walk';
+      clip = run ? 'Run' : P.walk;
       speed = DEFS[clip].speed;
-    } else clip = 'Idle';
+    } else clip = P.idle;
     const prevAim = sim.lastAim || 'none';
-    // standing mode changes use the authored transition clips
-    const tname = { 'none>ads': 'Idle_To_ADS', 'ads>none': 'ADS_To_Idle', 'none>hip': 'Idle_To_HipFire', 'hip>none': 'HipFire_To_Idle', 'hip>ads': 'HipFire_To_ADS', 'ads>hip': 'ADS_To_HipFire' }[`${prevAim}>${aimMode}`];
-    if (tname && !moving && ['Idle', 'ADS_Idle', 'HipFire_Idle'].includes(sim.base)) {
-      setBase(tname, 0.08);
-      sim.pendingAfterTransition = true;
-    }
+    // standing / crouched mode changes use the authored transition clips
+    const tname = posture === 'stand'
+      ? { 'none>ads': 'Idle_To_ADS', 'ads>none': 'ADS_To_Idle', 'none>hip': 'Idle_To_HipFire', 'hip>none': 'HipFire_To_Idle', 'hip>ads': 'HipFire_To_ADS', 'ads>hip': 'ADS_To_HipFire' }[`${prevAim}>${aimMode}`]
+      : posture === 'crouch' ? { 'none>ads': 'Crouch_To_Crouch_ADS', 'ads>none': 'Crouch_ADS_To_Crouch' }[`${prevAim}>${aimMode}`] : null;
+    if (tname && !moving && [P.idle, P.ads, P.hip].includes(sim.base)) setBase(tname, 0.08);
     sim.lastAim = aimMode;
     const inTransition = sim.base && sim.base.includes('_To_') && actions[sim.base].isRunning() && !moving;
     if (!inTransition) setBase(clip, 0.22, timeScale);
@@ -451,13 +492,14 @@ function updatePlay(dt) {
   S.group.rotation.y = sim.yaw;
 
   // automatic fire: additive recoil layer + effects at the cyclic rate
-  const fireOn = sim.fire && !sim.jumping;
-  const layer = additive[aimMode === 'ads' ? 'ADS_Fire_Auto' : 'HipFire_Fire_Auto'];
-  for (const [k, a] of Object.entries(additive)) {
+  const crawling = posture === 'prone' && moving;
+  const fireOn = sim.fire && !sim.jumping && !crawling;
+  const layerName = posture === 'prone' ? 'Prone_Fire_Auto' : posture === 'crouch' ? 'Crouch_ADS_Fire_Auto' : aimMode === 'ads' ? 'ADS_Fire_Auto' : 'HipFire_Fire_Auto';
+  const layer = additive[layerName];
+  for (const a of Object.values(additive)) {
     const want = fireOn && a === layer;
     if (want && !a.isRunning()) { a.reset(); a.setEffectiveWeight(1); a.play(); sim.fireTimer = 0; }
     if (!want && a.isRunning()) a.stop();
-    void k;
   }
   if (fireOn) {
     sim.fireTimer -= dt;
@@ -496,7 +538,8 @@ function updatePlayCamera(dt) {
   camera.fov = sim.aim === 'ads' ? 30 : 42; camera.near = 0.02; camera.updateProjectionMatrix();
   const dist = sim.aim === 'ads' ? 1.7 : 2.6;
   const side = sim.aim === 'ads' ? -0.62 : -0.55;
-  const pivot = S.group.position.clone().add(new THREE.Vector3(0, sim.aim === 'ads' ? 1.6 : 1.55, 0));
+  const ph = { stand: sim.aim === 'ads' ? 1.6 : 1.55, crouch: 1.15, prone: 0.75 }[sim.posture || 'stand'];
+  const pivot = S.group.position.clone().add(new THREE.Vector3(0, ph, 0));
   const fwd = new THREE.Vector3(Math.sin(sim.camYaw), 0, Math.cos(sim.camYaw));
   const right = new THREE.Vector3(-fwd.z, 0, fwd.x).negate();
   const want = pivot.clone().addScaledVector(fwd, -dist * Math.cos(sim.camPitch)).addScaledVector(right, side).add(new THREE.Vector3(0, dist * Math.sin(sim.camPitch), 0));

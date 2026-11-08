@@ -45,9 +45,9 @@ export const BONE_DEFS = [
   ['Spine', 'Hips', v(0, 1.07, 0)],
   ['Spine1', 'Spine', v(0, 1.19, 0)],
   ['Spine2', 'Spine1', v(0, 1.32, 0)],
-  ['Neck', 'Spine2', v(0, 1.50, -0.01)],
-  ['Head', 'Neck', v(0, 1.585, 0.0)],
-  ['HeadTop_End', 'Head', v(0, 1.78, 0.0)],
+  ['Neck', 'Spine2', v(0, 1.462, -0.015)],
+  ['Head', 'Neck', v(0, 1.548, 0.0)],
+  ['HeadTop_End', 'Head', v(0, 1.745, 0.0)],
   ...sideBones('Left'),
   ...sideBones('Right'),
 ];
@@ -62,14 +62,14 @@ export const BIND_LOCAL = Object.fromEntries(
 );
 
 // Right eye, relative to the Head bone (bind axes). Used to align the sight line.
-export const RIGHT_EYE_LOCAL = v(-0.032, 0.083, 0.094);
-export const LEFT_EYE_LOCAL = v(0.032, 0.083, 0.094);
+export const RIGHT_EYE_LOCAL = v(-0.033, 0.083, 0.097);
+export const LEFT_EYE_LOCAL = v(0.033, 0.083, 0.097);
 
 // Shoulder pocket (where the rifle butt seats), in RightShoulder (clavicle) space.
 // Bind world ≈ (-0.14, 1.435, 0.085): between the plate carrier edge and the deltoid.
-export const SHOULDER_POCKET_LOCAL = v(-0.135, 1.448, 0.088).sub(BIND_WORLD.RightShoulder);
+export const SHOULDER_POCKET_LOCAL = v(-0.152, 1.452, 0.104).sub(BIND_WORLD.RightShoulder);
 // Point on the right flank under the armpit (hip-fire tuck), in Spine2 space.
-export const UNDERARM_TUCK_LOCAL = v(-0.205, 1.235, -0.04).sub(BIND_WORLD.Spine2);
+export const UNDERARM_TUCK_LOCAL = v(-0.232, 1.235, -0.04).sub(BIND_WORLD.Spine2);
 
 export const LEG_UPPER = BIND_WORLD.LeftUpLeg.distanceTo(BIND_WORLD.LeftLeg);
 export const LEG_LOWER = BIND_WORLD.LeftLeg.distanceTo(BIND_WORLD.LeftFoot);

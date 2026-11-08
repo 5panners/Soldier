@@ -159,6 +159,159 @@
     "shots": [],
     "events": {}
   },
+  "Crouch_Idle": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_Walk": {
+    "duration": 1.24,
+    "loop": true,
+    "inPlaceSpeed": 0.85,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_ADS_Idle": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_ADS_Walk": {
+    "duration": 1.24,
+    "loop": true,
+    "inPlaceSpeed": 0.85,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_ADS_Fire": {
+    "duration": 0.5,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0.06
+    ],
+    "events": {}
+  },
+  "Crouch_ADS_Fire_Auto": {
+    "duration": 0.6,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0,
+      0.0857,
+      0.1714,
+      0.2571,
+      0.3429,
+      0.4286,
+      0.5143
+    ],
+    "events": {}
+  },
+  "Crouch_Pose": {
+    "duration": 0.0167,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_ADS_Pose": {
+    "duration": 0.0167,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Stand_To_Crouch": {
+    "duration": 0.45,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_To_Stand": {
+    "duration": 0.5,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_To_Crouch_ADS": {
+    "duration": 0.32,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Crouch_ADS_To_Crouch": {
+    "duration": 0.4,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Prone_Idle": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Prone_Fire": {
+    "duration": 0.5,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0.06
+    ],
+    "events": {}
+  },
+  "Prone_Fire_Auto": {
+    "duration": 0.6,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [
+      0,
+      0.0857,
+      0.1714,
+      0.2571,
+      0.3429,
+      0.4286,
+      0.5143
+    ],
+    "events": {}
+  },
+  "Prone_Pose": {
+    "duration": 0.0167,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Prone_Crawl": {
+    "duration": 1.6,
+    "loop": true,
+    "inPlaceSpeed": 0.22,
+    "shots": [],
+    "events": {}
+  },
+  "Stand_To_Prone": {
+    "duration": 1.75,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
+  "Prone_To_Stand": {
+    "duration": 1.9,
+    "loop": false,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
   "Jump": {
     "duration": 1.85,
     "loop": false,

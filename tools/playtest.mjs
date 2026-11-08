@@ -30,5 +30,13 @@ await page.keyboard.down('KeyD'); await page.waitForTimeout(900); await snap('ad
 await page.mouse.up({ button: 'right' }); await page.waitForTimeout(600);
 await page.keyboard.press('KeyH'); await page.waitForTimeout(600);
 await page.mouse.down({ button: 'left' }); await reset(); await page.waitForTimeout(250); await snap('hipfire'); await page.mouse.up({ button: 'left' });
+await page.mouse.up({ button: 'left' }); await page.keyboard.press('KeyH');
+await page.keyboard.press('KeyC'); await page.waitForTimeout(900); await reset(); await snap('crouch');
+await page.keyboard.down('KeyW'); await page.waitForTimeout(900); await snap('crouchwalk'); await page.keyboard.up('KeyW');
+await page.keyboard.press('KeyZ'); await page.waitForTimeout(3200); await reset(); await snap('prone');
+await page.keyboard.down('KeyW'); await page.waitForTimeout(1500); await snap('crawl'); await page.keyboard.up('KeyW');
+await page.mouse.down({ button: 'left' }); await page.waitForTimeout(300); await snap('pronefire'); await page.mouse.up({ button: 'left' });
+await page.keyboard.press('KeyZ'); await page.waitForTimeout(2600); await snap('standup');
+console.log(await page.evaluate(() => { const d = window.__dbg.sim; return JSON.stringify({ posture: d.posture, base: d.base }); }));
 console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors');
 await browser.close(); server.close();

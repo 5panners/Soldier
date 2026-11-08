@@ -10,7 +10,7 @@ console.log('clip'.padEnd(20), 'dur'.padStart(6), 'frames'.padStart(7), 'footErr
 let bad = 0;
 for (const b of baked) {
   let eye = '';
-  if (b.def.name.startsWith('ADS') && !b.def.name.includes('_To_')) {
+  if (/^(ADS|Crouch_ADS|Prone)/.test(b.def.name) && !b.def.name.includes('_To_') && b.def.name !== 'Prone_Crawl') {
     let m = 0;
     for (const r of b.poses) { const e = eyeInWeapon(r); m = Math.max(m, Math.hypot(e.x, e.y - WEAPON.SIGHT_Y)); }
     eye = (m * 1000).toFixed(1);

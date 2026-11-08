@@ -33,16 +33,29 @@ function gearW(p) {
   return w;
 }
 
+// Build proportions: a stocky, well-muscled infantryman in body armour.
+export const BUILD = { torsoW: 1.12, torsoD: 1.10, leg: 1.14, arm: 1.16, hand: 1.08, boot: 1.08, head: 1.03 };
+export const HEAD_DROP = 0.037; // short, thick neck (head modelled 3.7 cm lower than the original design)
+
 export function buildSoldierGeometry() {
   const B = new MeshBuilder();
-  buildTorso(B);
-  buildHeadAndHelmet(B);
+  // torso, neck and gear: built at nominal size then widened about the spine axis
+  const T = new MeshBuilder();
+  buildTorso(T);
+  buildGear(T);
+  B.append(T, (p) => p.set(p.x * BUILD.torsoW, p.y, p.z * BUILD.torsoD));
+  // head + helmet: lowered onto the shorter neck
+  const H = new MeshBuilder();
+  buildHeadAndHelmet(H);
+  B.append(H, (p) => p.set(p.x * BUILD.head, (p.y - 1.665) * BUILD.head + 1.665 - HEAD_DROP, p.z * BUILD.head));
   for (const side of ['Left', 'Right']) {
     buildLeg(B, side);
     buildArm(B, side);
-    buildHand(B, side);
+    const HB = new MeshBuilder();
+    buildHand(HB, side);
+    const wr = BW[`${side}Hand`];
+    B.append(HB, (p) => p.sub(wr).multiplyScalar(BUILD.hand).add(wr));
   }
-  buildGear(B);
   return B.build();
 }
 
@@ -67,9 +80,9 @@ function buildTorso(B) {
   B.loft(rings, cols, torsoW, { capStart: true, capEnd: true });
   // neck
   const nr = [
-    frameRing(V(0, 1.47, -0.008), up, sx, 0.055, 0.055, 8),
-    frameRing(V(0, 1.55, -0.002), up, sx, 0.050, 0.052, 8),
-    frameRing(V(0, 1.60, 0.005), up, sx, 0.052, 0.055, 8),
+    frameRing(V(0, 1.47, -0.008), up, sx, 0.062, 0.060, 8),
+    frameRing(V(0, 1.515, -0.002), up, sx, 0.057, 0.057, 8),
+    frameRing(V(0, 1.565, 0.008), up, sx, 0.054, 0.058, 8),
   ];
   B.loft(nr, ['skin', 'skin'], [wm(['Spine2', 0.5], ['Neck', 0.5]), w1('Neck'), wm(['Neck', 0.4], ['Head', 0.6])], { capStart: false, capEnd: false });
 }
@@ -174,13 +187,13 @@ function buildLeg(B, side) {
     [0.25, 0.048, 0.054, -0.004, w1(`${P}Leg`)],
     [0.19, 0.050, 0.056, 0.0, w1(`${P}Leg`)],
   ];
-  const rings = rows.map(([y, rx, rz, zo]) => frameRing(V(at(y), y, zo), down, sx, rx, rz, 8, { phase: Math.PI / 8 }));
+  const rings = rows.map(([y, rx, rz, zo]) => frameRing(V(at(y), y, zo), down, sx, rx * BUILD.leg, rz * BUILD.leg, 8, { phase: Math.PI / 8 }));
   B.loft(rings, ['fabric', 'fabric', 'fabricLight', 'fabric', 'fabric', 'fabric', 'fabric', 'fabric', 'fabricDark'], rows.map((r) => r[4]), { capStart: false, capEnd: true });
   // cargo pocket on thigh side
-  B.box(V(at(0.72) + s * 0.08, 0.72, 0.01), [0.024, 0.13, 0.10], 'fabricDark', w1(`${P}UpLeg`));
+  B.box(V(at(0.72) + s * 0.08 * BUILD.leg, 0.72, 0.01), [0.024, 0.13, 0.10], 'fabricDark', w1(`${P}UpLeg`));
   // knee pad
-  B.box(V(at(0.51), 0.505, 0.062), [0.085, 0.10, 0.03], 'pad', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]), { taperTop: [0.9, 1], taperBottom: [0.85, 1] });
-  B.box(V(at(0.51), 0.505, 0.079), [0.06, 0.07, 0.01], 'black', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]));
+  B.box(V(at(0.51), 0.505, 0.062 * BUILD.leg), [0.085 * BUILD.leg, 0.10, 0.03], 'pad', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]), { taperTop: [0.9, 1], taperBottom: [0.85, 1] });
+  B.box(V(at(0.51), 0.505, 0.079 * BUILD.leg), [0.06 * BUILD.leg, 0.07, 0.01], 'black', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]));
 
   // boot upper
   const bootRows = [
@@ -188,14 +201,14 @@ function buildLeg(B, side) {
     [0.14, 0.054, 0.062, 0.000, wm([`${P}Leg`, 0.7], [`${P}Foot`, 0.3])],
     [0.095, 0.055, 0.068, 0.006, wm([`${P}Leg`, 0.25], [`${P}Foot`, 0.75])],
   ];
-  const brings = bootRows.map(([y, rx, rz, zo]) => frameRing(V(ank.x, y, zo), down, sx, rx, rz, 8, { phase: Math.PI / 8 }));
+  const brings = bootRows.map(([y, rx, rz, zo]) => frameRing(V(ank.x, y, zo), down, sx, rx * BUILD.boot, rz * BUILD.boot, 8, { phase: Math.PI / 8 }));
   B.loft(brings, 'boot', bootRows.map((r) => r[4]), { capStart: true, capEnd: false });
   // foot body (heel to ball) and toe box
   const F = w1(`${P}Foot`), T = w1(`${P}ToeBase`);
-  B.box(V(ank.x, 0.058, 0.035), [0.098, 0.085, 0.205], 'boot', F, { taperTop: [0.9, 0.8] });
-  B.box(V(ank.x, 0.012, 0.035), [0.104, 0.024, 0.215], 'bootSole', F);
-  B.box(V(ank.x, 0.044, 0.18), [0.094, 0.060, 0.09], 'boot', T, { taperTop: [0.85, 0.7] });
-  B.box(V(ank.x, 0.012, 0.18), [0.100, 0.024, 0.095], 'bootSole', T);
+  B.box(V(ank.x, 0.058, 0.035), [0.098 * BUILD.boot, 0.085, 0.205 * BUILD.boot], 'boot', F, { taperTop: [0.9, 0.8] });
+  B.box(V(ank.x, 0.012, 0.035), [0.104 * BUILD.boot, 0.024, 0.215 * BUILD.boot], 'bootSole', F);
+  B.box(V(ank.x, 0.044, 0.18 + 0.005), [0.094 * BUILD.boot, 0.060, 0.09 * BUILD.boot], 'boot', T, { taperTop: [0.85, 0.7] });
+  B.box(V(ank.x, 0.012, 0.18 + 0.005), [0.100 * BUILD.boot, 0.024, 0.095 * BUILD.boot], 'bootSole', T);
   // laces strip
   B.box(V(ank.x, 0.105, 0.075), [0.03, 0.012, 0.09], 'bootSole', F, { quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.45, 0, 0)) });
 }
@@ -220,12 +233,12 @@ function buildArm(B, side) {
     [0.730, 0.034, 0.040, wm([`${P}ForeArm`, 0.75], [`${P}Hand`, 0.25]), 0.0],
     [0.755, 0.026, 0.040, wm([`${P}ForeArm`, 0.35], [`${P}Hand`, 0.65]), 0.0],
   ];
-  const rings = rows.map(([x, rx, rz, , yo]) => frameRing(V(x * s, sh.y + yo, sh.z), ax, sideV, rx, rz, 8, { phase: Math.PI / 8 }));
+  const rings = rows.map(([x, rx, rz, , yo]) => frameRing(V(x * s, sh.y + yo, sh.z), ax, sideV, rx * BUILD.arm, rz * BUILD.arm, 8, { phase: Math.PI / 8 }));
   B.loft(rings, ['fabric', 'fabric', 'fabric', 'fabric', 'fabric', 'fabric', 'fabricLight', 'fabric', 'glove', 'glove'], rows.map((r) => r[3]), { capStart: false, capEnd: true });
   // shoulder pocket patch (upper arm)
-  B.box(V(0.28 * s, sh.y + 0.0, sh.z + 0.0), [0.06, 0.08, 0.118], 'fabricDark', w1(`${P}Arm`));
+  B.box(V(0.28 * s, sh.y + 0.0, sh.z + 0.0), [0.06, 0.08 * BUILD.arm, 0.118 * BUILD.arm], 'fabricDark', w1(`${P}Arm`));
   // elbow pad (sleeve reinforcement)
-  B.box(V(0.475 * s, sh.y, sh.z - 0.042), [0.06, 0.07, 0.016], 'fabricDark', wm([`${P}Arm`, 0.5], [`${P}ForeArm`, 0.5]));
+  B.box(V(0.475 * s, sh.y, sh.z - 0.042 * BUILD.arm), [0.06, 0.07, 0.016], 'fabricDark', wm([`${P}Arm`, 0.5], [`${P}ForeArm`, 0.5]));
   void el; void wr;
 }
 

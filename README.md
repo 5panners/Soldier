@@ -1,20 +1,22 @@
 # Soldier Simulator
 
 A flat-shaded, low-poly, fully rigged infantry soldier with rifle animations, plus a browser simulator to preview and play them.
-Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifle + 24 animation clips) that you can import into Unity, Unreal, Godot or Blender.
+Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifle + 43 animation clips) that you can import into Unity, Unreal, Godot or Blender.
 
 ![ADS](docs/images/ads.png)
 
 | Aim down sights: right-eye view through the optic | Hip fire with the stock tucked under the right arm |
 |---|---|
 | ![sight picture](docs/images/sight_picture.png) | ![hip fire](docs/images/hipfire.png) |
+| **Crouched, aiming** | **Prone firing position** |
+| ![crouch ADS](docs/images/crouch_ads.png) | ![prone](docs/images/prone.png) |
 
 ## What's in the box
 
-* **Soldier model.** One skinned mesh, one material and about 3.2k triangles. It is flat shaded from true face normals, so it stays faceted in any engine, and coloured through a small palette texture. The kit is a high-cut helmet with headset and NVG mount, ballistic glasses, combat shirt, plate carrier with mag/admin pouches, radio, assault pack, battle belt, knee pads, gloves and boots.
+* **Soldier model.** A stocky, armoured build with a short, thick neck. One skinned mesh, one material and about 3.2k triangles. It is flat shaded from true face normals, so it stays faceted in any engine, and coloured through a small palette texture. The kit is a high-cut helmet with headset and NVG mount, ballistic glasses, combat shirt, plate carrier with mag/admin pouches, radio, assault pack, battle belt, knee pads, gloves and boots.
 * **Rifle.** A generic carbine of original design with a red-dot optic (the reticle is modelled). It is attached to a `Weapon_R` socket bone on the right hand and carries named attach points: `Muzzle`, `Ejection`, `SightLine` and `LeftHand_IK`.
 * **Skeleton.** 44 bones with Mixamo-style names (`Hips`, `Spine`…`Spine2`, `Neck`, `Head`, `LeftArm`, `LeftForeArm`, `LeftHand`, finger chains, `LeftUpLeg`, `LeftLeg`, `LeftFoot`, `LeftToeBase`…). It is bound in a T-pose. Units are metres, +Y is up and the character faces +Z.
-* **Animations.** 24 clips baked at 60 fps:
+* **Animations.** 43 clips baked at 60 fps:
 
 | Group | Clips |
 |---|---|
@@ -22,8 +24,10 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 | Weapon stances | `ADS_Idle`, `HipFire_Idle` |
 | Firing | `ADS_Fire`, `ADS_Fire_Auto` (700 RPM loop), `HipFire_Fire`, `HipFire_Fire_Auto` |
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
+| Crouch | `Crouch_Idle`, `Crouch_Walk` 0.85 m/s, `Crouch_ADS_Idle`, `Crouch_ADS_Walk`, `Crouch_ADS_Fire`, `Crouch_ADS_Fire_Auto`, `Stand_To_Crouch`, `Crouch_To_Stand`, `Crouch_To_Crouch_ADS`, `Crouch_ADS_To_Crouch` |
+| Prone | `Prone_Idle` (aiming), `Prone_Fire`, `Prone_Fire_Auto`, `Prone_Crawl` 0.22 m/s (high crawl), `Stand_To_Prone`, `Prone_To_Stand` |
 | Jump | `Jump` (full), `Jump_Start`, `Jump_Air` (loop), `Jump_Land` |
-| Static poses | `Idle_Pose`, `ADS_Pose`, `HipFire_Pose` (aim-offset / additive references) |
+| Static poses | `Idle_Pose`, `ADS_Pose`, `HipFire_Pose`, `Crouch_Pose`, `Crouch_ADS_Pose`, `Prone_Pose` (aim-offset / additive references) |
 
 Per-clip metadata is in [`exports/animations.json`](exports/animations.json) and in the glTF `extras` of the `Soldier` node: duration, loop flag, in-place speed, shot times and jump take-off/landing times. Details are in [docs/ANIMATIONS.md](docs/ANIMATIONS.md).
 
@@ -42,6 +46,7 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 * **Viewer** lets you pick any clip, cross-fade between clips, scrub, step frames and change playback speed. You can also show the skeleton or wireframe and switch between camera presets. In-place clips scroll the ground at the clip's speed, so you can check that planted feet stay locked.
 * **Play (WASD)** is a third-person sandbox with a firing range:
   * `W A S D`: move. `Shift`: run. `Space`: jump.
+  * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
   * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
   * `V`: look through the soldier's right eye down the optic. `Esc`: back to the viewer.
 
@@ -59,9 +64,16 @@ The clips are not hand-keyed curves. Each frame is a high-level pose (pelvis, ch
    * Hip fire: the stock is clamped under the right arm.
    * ADS: the butt sits in the shoulder pocket and the barrel points straight ahead.
 4. **Hands.** Two-bone arm IK locks the right hand to the pistol grip and the left hand under the handguard. Elbow poles are chosen per stance, and forearm twist is shared between forearm and wrist. The index finger lies straight along the receiver until the soldier fires, then rests on and presses the trigger.
-5. **Cheek weld.** For ADS, an optimiser (Nelder–Mead) solves neck flexion, head tilt and shoulder elevation within comfortable joint ranges, so the right eye sits on the optic's sight line. It lands within about 0.1 mm in the static pose and within 1 mm while walking.
+5. **Cheek weld.** For every aiming stance (standing, crouched and prone), an optimiser (Nelder–Mead) solves neck flexion, head tilt and shoulder elevation within comfortable joint ranges, so the right eye sits on the optic's sight line. It lands within about 0.2 mm in the static poses and within 2 mm while walking. The solutions are cached in `src/calib-cache.js`; run `npm run calibrate` after changing a stance or the skeleton.
 6. **Secondary motion.** A damped spring driven by the torso's vertical acceleration makes the rifle lag and dip with each footfall and on jump landing. Recoil is a damped-oscillator impulse: the muzzle climbs, the stock drives back into the shoulder, and the chest and shoulder absorb the kick with a slight delay. Automatic fire sums the impulses periodically, so the loop is seamless.
-7. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.5 s airtime, about 0.3 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
+7. **Natural walking.** The upper body isn't a rigid turret:
+   * The thorax counter-rotates against the pelvis.
+   * The chest leans into each weight transfer and dips on the loading response.
+   * The shoulders bounce just after each footfall, and the head nods and settles.
+   * The rifle lags vertically and sideways on damped springs.
+   * Knees stay soft through stance, and the left and right steps aren't mirror-perfect.
+8. **Crawl and prone.** The high crawl plants each forearm and shin as a ground contact that moves backward at the crawl speed. The right elbow advances with the left knee, then the left elbow with the right knee. Pelvis height and chest pitch are solved each frame so the planted knees and elbows touch the ground, and the rifle stays cradled across both forearms. Getting down to prone and back up is a multi-key motion: crouch → both knees → onto the forearms → legs back → aim. It interpolates smoothly through every key.
+9. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.5 s airtime, about 0.3 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
 
 The biomechanics and marksmanship references behind the numbers are listed in [docs/REFERENCES.md](docs/REFERENCES.md).
 
@@ -92,7 +104,7 @@ This re-bakes headlessly, writes `exports/soldier.glb` and `exports/animations.j
 | **Blender** | File → Import → glTF 2.0. The clips appear as Actions. |
 
 Tips:
-* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 3.2, `ADS_Walk` 0.9 m/s) so the feet stay locked to the ground.
+* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 3.2, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.22 m/s) so the feet stay locked to the ground.
 * **Weapon socket.** The rifle hangs off `Weapon_R`. To swap guns, attach your own weapon to that bone. The grip origin is the weapon origin, +Z is the muzzle and +Y is up.
 * **Support hand.** Use the `LeftHand_IK` node with your engine's two-bone IK to keep the left hand on the handguard when blending or layering.
 * **Recoil layering.** Use `ADS_Pose` / `HipFire_Pose` as the reference pose when you make the fire clips additive, then layer them over walking. The simulator does exactly this.
@@ -106,7 +118,8 @@ src/soldier.js      low-poly soldier mesh + skin weights
 src/weapon.js       rifle mesh, grip frames, attach points
 src/meshkit.js      flat-shaded mesh builder + palette texture
 src/solver.js       full-body IK pose solver
-src/motion.js       gait model, stances, ADS calibration, recoil, springs
+src/motion.js       gait model, stances, cheek-weld calibration, recoil, springs
+src/calib-cache.js  cached cheek-weld solutions (npm run calibrate)
 src/clips.js        clip library (what every animation does)
 src/bake.js         bake to THREE.AnimationClip (60 fps)
 src/export.js       GLB exporter
@@ -117,4 +130,22 @@ exports/            soldier.glb + animations.json
 
 ## Tweaking
 
-Everything is parametric. To change cadence, speed, stride, bob or lean, edit `GAITS` in `src/clips.js`. To change foot positions or weapon carry, edit `STANCES` in `src/motion.js`. To change recoil strength, edit `ADS_RECOIL` / `HIP_RECOIL`. Then run `npm run validate && npm run export` to rebuild the GLB.
+Everything is parametric:
+* **Gait** (cadence, speed, stride, bob, lean): edit `GAITS` in `src/clips.js`.
+* **Stances** (foot positions, weapon carry): edit `STANCES` in `src/motion.js`.
+* **Build** (bulk, neck length): edit `BUILD` / `HEAD_DROP` in `src/soldier.js`.
+* **Recoil strength**: edit `ADS_RECOIL` / `HIP_RECOIL`.
+
+Then rebuild the GLB:
+
+```bash
+npm run calibrate
+```
+
+```bash
+npm run validate
+```
+
+```bash
+npm run export
+```

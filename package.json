@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "serve": "node tools/serve.mjs",
+    "calibrate": "node tools/calibrate.mjs",
     "validate": "node tools/validate.mjs",
     "export": "node tools/export-glb.mjs",
     "vendor": "node tools/vendor.mjs"
