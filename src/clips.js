@@ -128,13 +128,14 @@ export const GAITS = {
     lagX: { freq: 2.6, zeta: 0.5, gain: 0.5 },
   },
   run: {
-    T: 0.68, v: 3.2, stance: 0.34, heelRock: 0.05, heelOff: 0.14, zHS: 0.23, footX: 0.075, toeOut: deg(5),
-    hsPitch: deg(10), toePitch: deg(40), heelRisePow: 1.3, lift: 0.28, liftSkew: 0.55, kickBack: -0.20,
-    swingInset: 0.008, landVy: 0.55, pitchEase: 2.0, swingPitchBias: deg(-8), swingToe: deg(4),
+    // ~4.3 m/s combat run: 1.5 m steps at ~171 steps/min, ~0.2 s ground contact
+    T: 0.70, v: 4.3, stance: 0.28, heelRock: 0.045, heelOff: 0.12, zHS: 0.27, footX: 0.075, toeOut: deg(5),
+    hsPitch: deg(10), toePitch: deg(42), heelRisePow: 1.3, lift: 0.34, liftSkew: 0.55, kickBack: -0.26,
+    swingInset: 0.008, landVy: 0.7, pitchEase: 2.0, swingPitchBias: deg(-8), swingToe: deg(4),
     hips: (p) => ({
-      pos: V3(-0.010 * Math.cos(TAU * (p - 0.17)), 0.905 - 0.032 * Math.cos(2 * TAU * (p - 0.17)), -0.012 * Math.cos(2 * TAU * (p - 0.17))),
-      yaw: deg(-5) + deg(5) * Math.cos(TAU * p), roll: -deg(2.5) * Math.cos(TAU * (p - 0.17)),
-      pitch: deg(10) + deg(2) * Math.cos(2 * TAU * (p - 0.2)),
+      pos: V3(-0.010 * Math.cos(TAU * (p - 0.14)), 0.905 - 0.034 * Math.cos(2 * TAU * (p - 0.14)), -0.014 * Math.cos(2 * TAU * (p - 0.14))),
+      yaw: deg(-5) + deg(6) * Math.cos(TAU * p), roll: -deg(2.5) * Math.cos(TAU * (p - 0.14)),
+      pitch: deg(12) + deg(2) * Math.cos(2 * TAU * (p - 0.17)),
     }),
     lag: { freq: 4.8, zeta: 0.45, gain: 0.45 },
   },
@@ -620,11 +621,11 @@ export function buildClipLibrary() {
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
   const RUN_ST = derive(LR, {
     mode: { ...LR.mode, rel: qEuler(deg(36), deg(28), deg(-20)), offset: V3(0.01, -0.035, 0.03) },
-    clavicle: { Left: clav('Left', 3, 28), Right: clav('Right', 3, 4) },
+    clavicle: { Left: clav('Left', 3, 33), Right: clav('Right', 3, 4) },
     elbowPole: { Left: V3(0.25, -1, -0.35), Right: V3(-0.45, -1, -0.6) },
   });
   clips.push(locomotion('Run', GAITS.run, lively(RUN_ST, {
-    pitch: 15, yaw: -13, roll: 1, pelvisYaw0: -5, counter: 0.6, pitchAmp: 1.8, rollAmp: 1.6, clavAmp: 2.5, headPitch: 3, headAmp: 1.8, phase: 0.06,
+    pitch: 18, yaw: -13, roll: 1, pelvisYaw0: -5, counter: 0.6, pitchAmp: 1.8, rollAmp: 1.6, clavAmp: 2.5, headPitch: 3, headAmp: 1.8, phase: 0.06,
   })));
 
   // Aiming while walking: 'Groucho' heel-to-toe walk, chest world-locked, cheek weld kept

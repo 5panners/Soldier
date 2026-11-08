@@ -16,7 +16,7 @@ The animations are procedurally authored, not motion captured. Their timing, joi
   [Konstanz ISBS proceedings](https://ojs.ub.uni-konstanz.de/cpa/article/view/1308/1229) · [Running biomechanics chapter](https://www.scribd.com/document/875703918/Chapter-16)
 * Cadence 150–180 spm; knee flexion 20–30° at initial contact; vertical oscillation is linked to running economy.
   [Running form research summary](https://runningform.vercel.app/research) · [PMC5473370](https://pmc.ncbi.nlm.nih.gov/articles/PMC5473370)
-* Used in `GAITS.run`: 34 % stance with two flight phases; 176 spm; 6.4 cm vertical oscillation; high heel recovery; 15° trunk lean.
+* Used in `GAITS.run`: 4.3 m/s with 1.5 m steps; 28 % stance (about 0.2 s contact) with two flight phases; 171 spm; about 6.8 cm vertical oscillation; high heel recovery; 18° trunk lean.
 
 ## Load carriage / walking with a rifle
 * Load increases forward trunk inclination; walking with a rifle plus boots and helmet flexes the trunk further forward; weapon handling does not significantly change stride-time variability.

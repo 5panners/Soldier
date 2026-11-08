@@ -20,7 +20,7 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 
 | Group | Clips |
 |---|---|
-| Locomotion (in place) | `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.25 m/s, `Run` 3.2 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 0.9 m/s |
+| Locomotion (in place) | `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.25 m/s, `Run` 4.3 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 0.9 m/s |
 | Weapon stances | `ADS_Idle`, `HipFire_Idle` |
 | Firing | `ADS_Fire`, `ADS_Fire_Auto` (700 RPM loop), `HipFire_Fire`, `HipFire_Fire_Auto` |
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
@@ -105,7 +105,7 @@ This re-bakes headlessly, writes `exports/soldier.glb` and `exports/animations.j
 | **Blender** | File → Import → glTF 2.0. The clips appear as Actions. |
 
 Tips:
-* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 3.2, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.20 m/s) so the feet stay locked to the ground.
+* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.25, `Run` 4.3, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.20 m/s) so the feet stay locked to the ground.
 * **Weapon socket.** The rifle hangs off `Weapon_R`. To swap guns, attach your own weapon to that bone. The grip origin is the weapon origin, +Z is the muzzle and +Y is up.
 * **Support hand.** Use the `LeftHand_IK` node with your engine's two-bone IK to keep the left hand on the handguard when blending or layering.
 * **Recoil layering.** Use `ADS_Pose` / `HipFire_Pose` as the reference pose when you make the fire clips additive, then layer them over walking. The simulator does exactly this.

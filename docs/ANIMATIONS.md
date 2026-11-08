@@ -18,7 +18,7 @@ Vertical motion (gait bob, jump arc) is baked into `Hips.position`.
 |---|---|---|---|---|
 | `Idle` | 4.00 s | ✓ | — | Low ready: butt in the shoulder pocket, muzzle about 30° down, index finger straight along the receiver. 15 breaths/min (chest pitch and clavicle lift), slow weight shift, and a head scan to the left and back. |
 | `Walk` | 1.10 s | ✓ | 1.25 m/s | Patrol walk at the low ready, 109 steps/min, 0.69 m step. Stance is 62 % of the cycle. Heel strike with 16° dorsiflexion, heel-off at 40 %, toe-off with 38° heel rise and toe bend. Soft knees through stance. Restrained pelvis: yaw ±3.5°, obliquity ±1.8°, sway ±1.1 cm, bob ±1.9 cm. The thorax counter-rotates and leans into the weight transfer, the shoulders bounce after each footfall, the head nods and settles, and the rifle lags vertically and sideways. |
-| `Run` | 0.68 s | ✓ | 3.2 m/s | 176 steps/min. Stance is 34 %, with two flight phases. Midfoot contact, high heel kick and about 6.4 cm vertical oscillation. 15° trunk lean and thorax counter-rotation. The rifle is carried compact across the chest, muzzle down-left. |
+| `Run` | 0.70 s | ✓ | 4.3 m/s | Combat run: 1.5 m steps at 171 steps/min, stance 28 % (about 0.2 s ground contact) with two flight phases. Midfoot contact, high heel recovery, about 6.8 cm vertical oscillation, 18° trunk lean and thorax counter-rotation. The rifle is carried compact across the chest, muzzle down-left. |
 | `ADS_Walk` | 1.20 s | ✓ | 0.9 m/s | Aiming "Groucho" walk: knees bent, smooth rolling heel-to-toe, chest world-locked. Cheek weld kept: the eye stays within 1 mm of the sight line. |
 | `HipFire_Walk` | 1.20 s | ✓ | 0.9 m/s | The same rolling gait with the stock clamped under the right arm. |
 

@@ -487,7 +487,7 @@ function updatePlay(dt) {
     const inTransition = sim.base && sim.base.includes('_To_') && actions[sim.base].isRunning() && !moving;
     if (!inTransition) setBase(clip, 0.22, timeScale);
   } else {
-    speed = moving ? (sim.speed > 2 ? 3.0 : 1.2) : 0;
+    speed = moving ? (sim.speed > 2 ? 4.0 : 1.2) : 0;
   }
   sim.lowerYaw += (lowerYaw - sim.lowerYaw) * Math.min(1, dt * 10);
   sim.speed += (speed - sim.speed) * Math.min(1, dt * 6);

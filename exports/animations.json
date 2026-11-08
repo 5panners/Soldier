@@ -28,9 +28,9 @@
     "events": {}
   },
   "Run": {
-    "duration": 0.68,
+    "duration": 0.7,
     "loop": true,
-    "inPlaceSpeed": 3.2,
+    "inPlaceSpeed": 4.3,
     "shots": [],
     "events": {}
   },
