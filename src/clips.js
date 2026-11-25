@@ -123,7 +123,7 @@ export const GAITS = {
         0.912 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
         -0.008 * Math.cos(2 * TAU * (p - 0.30))),
       yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
-      pitch: deg(5) + deg(1.3) * Math.cos(2 * TAU * (p - 0.08)),
+      pitch: deg(2) + deg(1.2) * Math.cos(2 * TAU * (p - 0.08)),
     }),
     lag: { freq: 3.1, zeta: 0.38, gain: 0.75 },
     lagX: { freq: 2.3, zeta: 0.45, gain: 0.6 },
@@ -707,7 +707,7 @@ export function buildClipLibrary() {
     clavicle: { Left: clav('Left', -2, 34), Right: clav('Right', -2, 2) },
   });
   clips.push(locomotion('Walk', GAITS.walk, lively(WALK_ST, {
-    pitch: 6, yaw: -11, roll: 1, pelvisYaw0: -4, counter: 0.55, pitchAmp: 1.0, rollAmp: 0.8, clavAmp: 1.4, headPitch: 4, headAmp: 1.1,
+    pitch: 1, yaw: -11, roll: 1, pelvisYaw0: -4, counter: 0.55, pitchAmp: 0.9, rollAmp: 0.8, clavAmp: 1.4, headPitch: 3, headAmp: 1.1,
   })));
 
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
