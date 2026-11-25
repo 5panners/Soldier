@@ -47,7 +47,7 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 * **Play (WASD)** is a third-person sandbox with a firing range:
   * `W` / `S`: walk forward / back along the soldier's own facing. `A` / `D`: strafe left / right (W/S with A/D walks diagonally). `Q` / `E`: turn him. Shooter-style mouse look: moving the mouse left/right turns him with the camera locked behind; mouse up/down or the ↑/↓ arrows tilt the view; the wheel zooms. Turning on the spot keeps his feet planted until about 55°, then he steps round. The step rate follows his actual speed as he accelerates and decelerates, so the feet stay locked to the ground. `Shift`: run. `Space`: from a walk or run, leap at once (or at the very next footfall if the take-off foot has just left the ground); standing still, a two-footed jump; facing a low wall, vault it.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
-  * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
+  * `RMB`: toggle aim down sights on / off. `LMB`: fire. `H`: toggle the hip-fire stance.
   * `V`: first-person eye view. It looks through the optic while aiming down sights, and straight ahead from the eyes otherwise. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
 
   The upper body turns so the barrel's bore axis passes exactly through the crosshair point (within 0.01°). Every round is cast along the bore and lands where it hits, with a bullet hole and dust. Firing layers additive recoil on top of the locomotion and spawns muzzle flash, tracers and ejected brass. While aiming, the pelvis turns toward the move direction and the chest keeps aiming. Moving backward plays the walk in reverse.

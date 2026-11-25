@@ -452,11 +452,10 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   if (mode !== 'play') return;
   if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock?.();
   if (e.button === 0) sim.fire = true;
-  if (e.button === 2) sim.aim = 'ads';
+  if (e.button === 2) sim.aim = sim.aim === 'ads' ? 'none' : 'ads'; // right click toggles aim down sights
 });
 window.addEventListener('mouseup', (e) => {
   if (e.button === 0) sim.fire = false;
-  if (e.button === 2 && sim.aim === 'ads') sim.aim = 'none';
 });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 // mouse wheel: orbit radius in play mode (0.5x .. 4x of the default distance)
