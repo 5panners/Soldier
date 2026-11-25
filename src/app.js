@@ -597,11 +597,12 @@ function updatePlay(dt) {
         sim.yaw = sim.yaw + wrapAngle(moveYaw - sim.yaw) * Math.min(1, dt * 2.5); // slow pivot on the elbows
         clip = P.walk; speed = DEFS[clip].speed;
       } else {
-        sim.yaw = sim.yaw + wrapAngle(sim.camYaw - sim.yaw) * Math.min(1, dt * 2.5);
-        clip = P.idle;
+        clip = P.idle; // free-look: orbiting the camera never turns the body
       }
     } else if (aimMode !== 'none') {
-      sim.yaw = sim.yaw + wrapAngle(sim.camYaw - sim.yaw) * Math.min(1, dt * 14);
+      // the body only turns toward the camera while moving; standing still, orbiting is
+      // free-look (the upper body still bends toward the crosshair within its limits)
+      if (moving) sim.yaw = sim.yaw + wrapAngle(sim.camYaw - sim.yaw) * Math.min(1, dt * 14);
       if (moving) {
         clip = aimMode === 'ads' ? P.adsWalk : P.hipWalk;
         let d = wrapAngle(moveYaw - sim.yaw);
@@ -661,7 +662,7 @@ const smoother01 = (x) => x * x * x * (x * (x * 6 - 15) + 10);
 const _aim = { point: new THREE.Vector3(), err: 0 };
 function aimTarget() {
   const dir = new THREE.Vector3();
-  if (sim.eye) {
+  if (sim.eye && eyeThroughSight()) {
     // looking through the optic: aim along the camera yaw/pitch from the eye
     dir.set(Math.sin(sim.camYaw) * Math.cos(sim.camPitch), -Math.sin(sim.camPitch), Math.cos(sim.camYaw) * Math.cos(sim.camPitch));
     const eye = RIGHT_EYE_LOCAL.clone().applyMatrix4(S.bones.Head.matrixWorld);
@@ -714,18 +715,35 @@ function applyLowerBodyYaw() {
   B.Hips.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), th);
 }
 
+/** Eye view goes through the optic only while the rifle is actually shouldered and aimed. */
+function eyeThroughSight() {
+  const posture = sim.posture || 'stand';
+  if (sim.postureClip || sim.vault || sim.jumping) return false;
+  if (posture === 'prone') return (sim.speed || 0) < 0.05; // crawling: rifle is cradled
+  return sim.aim === 'ads';
+}
 function updatePlayCamera(dt) {
   const B = S.bones;
   S.group.updateMatrixWorld(true);
-  if (sim.eye || sim.aim === 'ads') {
-    if (sim.eye) {
-      const eye = RIGHT_EYE_LOCAL.clone().applyMatrix4(B.Head.matrixWorld);
+  if (sim.eye) {
+    const eye = RIGHT_EYE_LOCAL.clone().applyMatrix4(B.Head.matrixWorld);
+    camera.position.copy(eye);
+    if (eyeThroughSight()) {
+      // aiming down sights: look through the optic along the rifle
       const rq = new THREE.Quaternion(); S.rifle.getWorldQuaternion(rq);
-      camera.position.copy(eye);
       camera.quaternion.copy(rq).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
-      camera.fov = 32; camera.near = 0.01; camera.updateProjectionMatrix();
-      return;
+      camera.fov = 32;
+    } else {
+      // not aiming: first-person view from the eyes, looking ahead where the camera points
+      // (eye level between both eyes, slightly forward so the face doesn't fill the view)
+      const mid = new THREE.Vector3(0, 0.083, 0.135).applyMatrix4(B.Head.matrixWorld);
+      camera.position.copy(mid);
+      const dir = new THREE.Vector3(Math.sin(sim.camYaw) * Math.cos(sim.camPitch), -Math.sin(sim.camPitch), Math.cos(sim.camYaw) * Math.cos(sim.camPitch));
+      camera.lookAt(mid.clone().add(dir));
+      camera.fov = 70;
     }
+    camera.near = eyeThroughSight() ? 0.07 : 0.04; camera.updateProjectionMatrix(); // clip the helmet brim; the optic is ~0.28 m away
+    return;
   }
   camera.fov = sim.aim === 'ads' ? 30 : 42; camera.near = 0.02; camera.updateProjectionMatrix();
   const dist = sim.aim === 'ads' ? 2.1 : 2.6;
@@ -769,7 +787,7 @@ function frame() {
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
-    document.body.classList.toggle('eyeview', !!sim.eye);
+    document.body.classList.toggle('eyeview', !!sim.eye && eyeThroughSight());
     laser.visible = sim.laser;
     if (sim.laser) {
       const { p, d } = boreRay();

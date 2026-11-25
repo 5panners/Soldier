@@ -45,10 +45,10 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 
 * **Viewer** lets you pick any clip, cross-fade between clips, scrub, step frames and change playback speed. You can also show the skeleton or wireframe and switch between camera presets. In-place clips scroll the ground at the clip's speed, so you can check that planted feet stay locked.
 * **Play (WASD)** is a third-person sandbox with a firing range:
-  * `W A S D`: move. `Shift`: run. `Space`: jump, or vault when facing one of the low walls. While running, Space leaps on the next footfall; from a walk or standing it's an on-the-spot jump.
+  * `W A S D`: move (the soldier turns only when he moves; orbiting the camera while standing still is free look). `Shift`: run. `Space`: jump, or vault when facing one of the low walls. While running, Space leaps on the next footfall; from a walk or standing it's an on-the-spot jump.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
   * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
-  * `V`: look through the soldier's right eye down the optic. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
+  * `V`: first-person eye view. It looks through the optic while aiming down sights, and straight ahead from the eyes otherwise. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
 
   The upper body turns so the barrel's bore axis passes exactly through the crosshair point (within 0.01°). Every round is cast along the bore and lands where it hits, with a bullet hole and dust. Firing layers additive recoil on top of the locomotion and spawns muzzle flash, tracers and ejected brass. While aiming, the pelvis turns toward the move direction and the chest keeps aiming. Moving backward plays the walk in reverse.
 * **⬇ Export GLB** downloads the same file as `exports/soldier.glb`.
