@@ -96,11 +96,15 @@ const course = new THREE.Group();
     const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), m);
     b.position.set((x0 + x1) / 2, h / 2, (z0 + z1) / 2); course.add(b);
   };
-  const wedge = (x0, x1, z0, z1, hz0, hz1) => { // slanted top from height hz0 at z0 to hz1 at z1
-    const v = [[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1], [x0, hz0, z0], [x1, hz0, z0], [x1, hz1, z1], [x0, hz1, z1]];
-    const f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [3, 7, 6], [3, 6, 2], [0, 4, 7], [0, 7, 3], [1, 2, 6], [1, 6, 5]];
-    const pos = []; for (const t of f) for (const i of t) pos.push(...v[i]);
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  const wedge = (x0, x1, z0, z1, hz0, hz1) => { // solid block with a slanted top: hz0 at z0 -> hz1 at z1
+    const g = new THREE.BoxGeometry(x1 - x0, 1, z1 - z0);
+    const pa = g.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      const lz = pa.getZ(i) + (z1 - z0) / 2, t = lz / (z1 - z0);
+      pa.setY(i, pa.getY(i) > 0 ? hz0 + (hz1 - hz0) * t : 0);
+    }
+    g.translate((x0 + x1) / 2, 0, (z0 + z1) / 2);
+    g.computeVertexNormals();
     course.add(new THREE.Mesh(g, concrete));
   };
   // A
@@ -436,7 +440,13 @@ function footIK(dt) {
     const root = toChar(B[`${sd}UpLeg`].getWorldPosition(new THREE.Vector3()));
     const knee = toChar(B[`${sd}Leg`].getWorldPosition(new THREE.Vector3()));
     const target = toChar(I.A.clone().add(new THREE.Vector3(0, I.off, 0)));
-    const ik = twoBoneIK(root, target, l1, l2, knee.clone().sub(root));
+    // knee aims where the foot points (slightly outward), as in the authored clips - not along
+    // the leg's current bend, which flips sideways when the foot is raised onto a step
+    const side = sd === 'Left' ? 1 : -1;
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(charQ(B.Hips)).setY(0).normalize();
+    const pole = fwd.add(new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(0.12 * side)).normalize();
+    void knee;
+    const ik = twoBoneIK(root, target, l1, l2, pole);
     const bindPole = new THREE.Vector3(0, 0, 1);
     const upQ = frameRotation(BIND_LOCAL[`${sd}Leg`].clone().normalize(), bindPole, ik.mid.clone().sub(root), ik.pp);
     const loQ = frameRotation(BIND_LOCAL[`${sd}Foot`].clone().normalize(), bindPole, ik.end.clone().sub(ik.mid), ik.pp);
@@ -817,9 +827,16 @@ function updatePlay(dt) {
     if (posture === 'prone') {
       if (f !== 0) { clip = P.walk; speed = DEFS[clip].speed; if (back) timeScale = -1; }
       else clip = P.idle;
+    } else if (strafeOnly && posture === 'stand' && aimMode === 'ads') {
+      // aiming: careful side-step shuffle
+      clip = `ADS_Strafe_${r > 0 ? 'Right' : 'Left'}`;
+      speed = DEFS[clip].speed;
     } else if (strafeOnly && posture === 'stand') {
-      const side = r > 0 ? 'Right' : 'Left';
-      clip = aimMode === 'ads' ? `ADS_Strafe_${side}` : `Strafe_${side}`;
+      // walking / running strafe: the walk (or run with Shift) with the hips turned into the
+      // direction of travel and the chest still facing forward, like a running strafe
+      const runStrafe = (keys.ShiftLeft || keys.ShiftRight) && aimMode === 'none';
+      clip = runStrafe ? 'Run' : aimMode === 'hip' ? P.hipWalk : P.walk;
+      moveOff = (r > 0 ? -1 : 1) * deg(85); lowerYaw = moveOff;
       speed = DEFS[clip].speed;
     } else if (strafeOnly) {
       // crouched: crouch-walk with the pelvis turned sideways (no dedicated crouch strafe)
@@ -961,10 +978,13 @@ function applyLowerBodyYaw() {
   const B = S.bones;
   const ry = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), th);
   const qh = B.Hips.quaternion.clone();
+  const qs = qh.clone().multiply(B.Spine.quaternion); // Spine orientation in character space
   B.Hips.quaternion.premultiply(ry);
-  // Spine' = Qh^-1 * Ry(-th) * Qh * Spine  (keeps everything above the pelvis fixed)
-  const fix = qh.clone().invert().multiply(ry.clone().invert()).multiply(qh);
-  B.Spine.quaternion.premultiply(fix);
+  // counter-rotate the torso so everything above the pelvis stays put, shared between Spine
+  // and Spine1 so the waist twists smoothly instead of kinking at one joint
+  const half = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -th / 2);
+  B.Spine.quaternion.premultiply(qh.clone().invert().multiply(half).multiply(qh));
+  B.Spine1.quaternion.premultiply(qs.clone().invert().multiply(half).multiply(qs));
   B.Hips.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), th);
 }
 
