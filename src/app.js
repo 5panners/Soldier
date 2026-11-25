@@ -59,6 +59,66 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
+// ------------------------------------------------------------------ test course (play mode)
+// Stairs, ramps, a steep slope and a patch of uneven ground, west of the spawn point.
+// groundH(x, z) is the walkable height everywhere; foot IK and the character root use it.
+function inCourse(x, z) { return x > -42 && x < -13 && z > -8 && z < 28; }
+const TAN15 = Math.tan((15 * Math.PI) / 180), TAN25 = Math.tan((25 * Math.PI) / 180);
+function roughH(x, z) {
+  if (x < -40 || x > -31 || z < -6 || z > 26) return 0;
+  const edge = Math.min(1, (x + 40) / 1.5, (-31 - x) / 1.5, (z + 6) / 1.5, (26 - z) / 1.5);
+  const n = Math.sin(x * 1.7) * Math.cos(z * 1.3) * 0.6 + Math.sin(x * 0.6 + z * 0.8 + 1) * 0.4;
+  return 0.35 * (0.5 + 0.5 * n) * Math.max(0, edge);
+}
+function groundH(x, z) {
+  let h = roughH(x, z);
+  // A: 15 deg ramp up -> platform -> stairs down (x -22..-18)
+  if (x >= -22 && x <= -18) {
+    if (z >= 0 && z < 5.6) h = Math.max(h, z * TAN15);
+    else if (z >= 5.6 && z <= 8.4) h = Math.max(h, 1.5);
+    else if (z > 8.4 && z < 11.4) h = Math.max(h, 1.5 - (Math.floor((z - 8.4) / 0.3) + 1) * 0.15);
+  }
+  // B: stairs up -> platform -> steep 25 deg slope down (x -28..-24)
+  if (x >= -28 && x <= -24) {
+    if (z >= 0 && z < 3) h = Math.max(h, Math.min(1.5, (Math.floor(z / 0.3) + 1) * 0.15));
+    else if (z >= 3 && z <= 5) h = Math.max(h, 1.5);
+    else if (z > 5 && z < 5 + 1.5 / TAN25) h = Math.max(h, 1.5 - (z - 5) * TAN25);
+  }
+  return h;
+}
+const course = new THREE.Group();
+{
+  const concrete = new THREE.MeshStandardMaterial({ color: '#9a948a', flatShading: true, roughness: 0.95 });
+  const edgeMat = new THREE.MeshStandardMaterial({ color: '#7f796f', flatShading: true, roughness: 0.95 });
+  const dirt = new THREE.MeshStandardMaterial({ color: '#7d7556', flatShading: true, roughness: 1 });
+  const box = (x0, x1, z0, z1, h, m = concrete) => {
+    if (h <= 0.001) return;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), m);
+    b.position.set((x0 + x1) / 2, h / 2, (z0 + z1) / 2); course.add(b);
+  };
+  const wedge = (x0, x1, z0, z1, hz0, hz1) => { // slanted top from height hz0 at z0 to hz1 at z1
+    const v = [[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1], [x0, hz0, z0], [x1, hz0, z0], [x1, hz1, z1], [x0, hz1, z1]];
+    const f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [3, 7, 6], [3, 6, 2], [0, 4, 7], [0, 7, 3], [1, 2, 6], [1, 6, 5]];
+    const pos = []; for (const t of f) for (const i of t) pos.push(...v[i]);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+    course.add(new THREE.Mesh(g, concrete));
+  };
+  // A
+  wedge(-22, -18, 0, 5.6, 0, 1.5); box(-22, -18, 5.6, 8.4, 1.5);
+  for (let i = 0; i < 10; i++) box(-22, -18, 8.4 + i * 0.3, 8.7 + i * 0.3, 1.5 - (i + 1) * 0.15, i % 2 ? concrete : edgeMat);
+  // B
+  for (let i = 0; i < 10; i++) box(-28, -24, i * 0.3, (i + 1) * 0.3, (i + 1) * 0.15, i % 2 ? concrete : edgeMat);
+  box(-28, -24, 3, 5, 1.5); wedge(-28, -24, 5, 5 + 1.5 / TAN25, 1.5, 0);
+  // uneven ground patch
+  const pg = new THREE.PlaneGeometry(9, 32, 54, 192); pg.rotateX(-Math.PI / 2); pg.translate(-35.5, 0, 10);
+  const pa = pg.attributes.position;
+  for (let i = 0; i < pa.count; i++) pa.setY(i, roughH(pa.getX(i), pa.getZ(i)) + 0.003);
+  pg.computeVertexNormals();
+  course.add(new THREE.Mesh(pg, dirt));
+  course.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+}
+scene.add(course);
+
 // scattered low-poly props (for the play mode / sense of motion)
 const props = new THREE.Group();
 {
@@ -67,6 +127,7 @@ const props = new THREE.Group();
   let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 70; i++) {
     const r = 6 + rnd() * 40, a = rnd() * Math.PI * 2;
+    if (inCourse(Math.cos(a) * r, Math.sin(a) * r)) { rnd(); rnd(); continue; } // keep the test course clear
     const m = i % 3 === 0
       ? new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), crate)
       : new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + rnd() * 0.7, 0), mat);
@@ -108,6 +169,65 @@ const WALLS = [];
     WALLS.push({ g, x, z, yaw, half: w / 2 });
   }
 }
+// ------------------------------------------------------------------ hit boxes (collision)
+// Every prop gets a collider: boxes (crates, walls) as oriented boxes, rocks as circles,
+// target posts as thin circles. B toggles a wireframe view of them.
+const COLLIDERS = [];
+{
+  props.updateMatrixWorld(true);
+  for (const o of props.children) {
+    if (o.isMesh && o.geometry.type === 'BoxGeometry') {
+      const q = o.geometry.parameters;
+      COLLIDERS.push({ type: 'box', x: o.position.x, z: o.position.z, hx: q.width / 2, hz: q.depth / 2, yaw: o.rotation.y, top: o.position.y + q.height / 2 });
+    } else if (o.isMesh && o.geometry.type === 'DodecahedronGeometry') {
+      const r = o.geometry.parameters.radius;
+      COLLIDERS.push({ type: 'circle', x: o.position.x, z: o.position.z, r: r * 0.92, top: o.position.y + r });
+    } else if (o.isGroup) {
+      const w = WALLS.find((wl) => wl.g === o);
+      if (w) COLLIDERS.push({ type: 'box', x: w.x, z: w.z, hx: w.half + 0.02, hz: 0.145, yaw: w.yaw, top: 1.0 });
+      else COLLIDERS.push({ type: 'circle', x: o.position.x, z: o.position.z, r: 0.06, top: 1.7 }); // target post
+    }
+  }
+}
+const colliderViz = new THREE.Group(); colliderViz.visible = false; scene.add(colliderViz);
+{
+  const lm = new THREE.LineBasicMaterial({ color: '#ff5a36' });
+  for (const c of COLLIDERS) {
+    let geo;
+    if (c.type === 'box') geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(c.hx * 2, c.top, c.hz * 2));
+    else geo = new THREE.EdgesGeometry(new THREE.CylinderGeometry(c.r, c.r, c.top, 12));
+    const l = new THREE.LineSegments(geo, lm);
+    l.position.set(c.x, c.top / 2, c.z); l.rotation.y = c.type === 'box' ? c.yaw : 0;
+    colliderViz.add(l);
+  }
+}
+const BODY_R = 0.32, STEP_MAX = 0.45;
+function collide(p) {
+  for (let it = 0; it < 3; it++) {
+    for (const c of COLLIDERS) {
+      const dx = p.x - c.x, dz = p.z - c.z;
+      if (dx * dx + dz * dz > 25) continue;
+      if (c.top - p.y < STEP_MAX * 0.6) continue; // low enough to step over
+      if (c.type === 'circle') {
+        const d = Math.hypot(dx, dz), m = c.r + BODY_R;
+        if (d < m && d > 1e-6) { p.x = c.x + (dx / d) * m; p.z = c.z + (dz / d) * m; }
+      } else {
+        const cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
+        const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs; // world -> box local (inverse Ry)
+        const qx = Math.max(-c.hx, Math.min(c.hx, lx)), qz = Math.max(-c.hz, Math.min(c.hz, lz));
+        let ex = lx - qx, ez = lz - qz, d = Math.hypot(ex, ez), nx, nz, push;
+        if (d > 1e-6) { if (d >= BODY_R) continue; nx = ex / d; nz = ez / d; push = BODY_R - d; }
+        else { // centre inside the box: leave by the nearest face
+          const px = c.hx - Math.abs(lx), pz = c.hz - Math.abs(lz);
+          if (px < pz) { nx = Math.sign(lx) || 1; nz = 0; push = px + BODY_R; } else { nx = 0; nz = Math.sign(lz) || 1; push = pz + BODY_R; }
+        }
+        const nlx = lx + nx * push, nlz = lz + nz * push;
+        p.x = c.x + nlx * cs + nlz * sn; p.z = c.z - nlx * sn + nlz * cs; // box local -> world (Ry)
+      }
+    }
+  }
+}
+
 // the wall shown in the viewer while the Vault clip plays
 const viewerWall = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 0.25), new THREE.MeshStandardMaterial({ color: '#8a8478', flatShading: true }));
 viewerWall.castShadow = viewerWall.receiveShadow = true;
@@ -238,7 +358,7 @@ const raycaster = new THREE.Raycaster();
 let lastShot = null;
 function castRay(origin, dir, far = 400) {
   raycaster.set(origin, dir); raycaster.far = far;
-  const h = raycaster.intersectObjects([ground, props], true)[0];
+  const h = raycaster.intersectObjects([ground, props, course], true)[0];
   return h ? { point: h.point, distance: h.distance, object: h.object, normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0) }
     : { point: origin.clone().addScaledVector(dir, far), distance: far, object: null };
 }
@@ -275,6 +395,58 @@ function updateEffects(dt) {
     if (e.dust) e.vel.y -= 4 * dt;
     if (!e.shell && !e.keep && e.o.material) e.o.material.opacity = Math.max(0, 1 - e.t / e.life);
     if (e.t > e.life) { fx.remove(e.o); live.splice(i, 1); }
+  }
+}
+
+// ------------------------------------------------------------------ foot IK on uneven ground
+// The clips assume flat ground at the character root. Each frame in play mode: find the ground
+// under each foot (heel and toe), drop the pelvis so the lower foot can reach, then two-bone IK
+// each leg onto its ground and tilt planted feet to the slope.
+const _up = new THREE.Vector3(0, 1, 0);
+function groundNormal(x, z) {
+  const e = 0.06;
+  const n = new THREE.Vector3(groundH(x - e, z) - groundH(x + e, z), 2 * e, groundH(x, z - e) - groundH(x, z + e)).normalize();
+  return n.angleTo(_up) > deg(28) ? _up.clone() : n; // step edges: keep the foot level
+}
+function footIK(dt) {
+  const B = S.bones;
+  S.group.updateMatrixWorld(true);
+  const gy = S.group.position.y;
+  const gq = new THREE.Quaternion(); S.group.getWorldQuaternion(gq);
+  const info = {};
+  for (const sd of ['Left', 'Right']) {
+    const A = B[`${sd}Foot`].getWorldPosition(new THREE.Vector3());
+    const toe = B[`${sd}ToeBase`].getWorldPosition(new THREE.Vector3());
+    const heel = A.clone().add(A.clone().sub(toe).setY(0).normalize().multiplyScalar(0.06));
+    // ground under heel, ankle and toe; anything more than a step above/below the root is a
+    // ledge the foot can't use (it stays at the root's ground level instead)
+    const gc = (h) => (Math.abs(h - gy) <= STEP_MAX ? h : gy);
+    const g = Math.max(gc(groundH(heel.x, heel.z)), gc(groundH(A.x, A.z)), gc(groundH(toe.x, toe.z)));
+    const lift = Math.min(A.y - 0.085, toe.y - 0.025) - gy; // sole height above the root ground in the clip
+    info[sd] = { A, off: g - gy, plant: 1 - THREE.MathUtils.clamp(lift / 0.12, 0, 1), n: groundNormal(A.x, A.z), footQ: charQ(B[`${sd}Foot`]) };
+  }
+  const want = Math.min(0, info.Left.off, info.Right.off);
+  sim.pelvisDrop = (sim.pelvisDrop || 0) + (want - (sim.pelvisDrop || 0)) * Math.min(1, dt * 14);
+  B.Hips.position.y += sim.pelvisDrop;
+  S.group.updateMatrixWorld(true);
+  const l1 = BIND_LOCAL.LeftLeg.length(), l2 = BIND_LOCAL.LeftFoot.length();
+  for (const sd of ['Left', 'Right']) {
+    const I = info[sd];
+    if (Math.abs(I.off - sim.pelvisDrop) < 0.002 && I.n.y > 0.999) continue;
+    const root = toChar(B[`${sd}UpLeg`].getWorldPosition(new THREE.Vector3()));
+    const knee = toChar(B[`${sd}Leg`].getWorldPosition(new THREE.Vector3()));
+    const target = toChar(I.A.clone().add(new THREE.Vector3(0, I.off, 0)));
+    const ik = twoBoneIK(root, target, l1, l2, knee.clone().sub(root));
+    const bindPole = new THREE.Vector3(0, 0, 1);
+    const upQ = frameRotation(BIND_LOCAL[`${sd}Leg`].clone().normalize(), bindPole, ik.mid.clone().sub(root), ik.pp);
+    const loQ = frameRotation(BIND_LOCAL[`${sd}Foot`].clone().normalize(), bindPole, ik.end.clone().sub(ik.mid), ik.pp);
+    B[`${sd}UpLeg`].quaternion.copy(charQ(B.Hips).invert().multiply(upQ));
+    B[`${sd}Leg`].quaternion.copy(upQ.clone().invert().multiply(loQ));
+    // planted feet lie on the slope (ground normal into character space)
+    const nChar = I.n.clone().applyQuaternion(gq.clone().invert());
+    const tilt = new THREE.Quaternion().setFromUnitVectors(_up, nChar);
+    const fq = qPow(tilt, I.plant).multiply(I.footQ);
+    B[`${sd}Foot`].quaternion.copy(loQ.clone().invert().multiply(fq));
   }
 }
 
@@ -400,7 +572,7 @@ function setMode(m) {
   controls.enabled = m === 'view';
   if (m === 'play') {
     sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
-    sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null;
+    sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.falling = false; sim.vy = 0;
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
@@ -442,6 +614,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyV') sim.eye = !sim.eye;
   if (e.code === 'KeyL') sim.laser = !sim.laser;
+  if (e.code === 'KeyB') colliderViz.visible = !colliderViz.visible;
   if (e.code === 'KeyH') sim.aim = sim.aim === 'hip' ? 'none' : 'hip';
   if (e.code === 'KeyC') sim.wantPosture = (sim.posture || 'stand') === 'crouch' ? 'stand' : 'crouch';
   if (e.code === 'KeyZ') sim.wantPosture = (sim.posture || 'stand') === 'prone' ? 'stand' : 'prone';
@@ -483,7 +656,7 @@ function vaultableWall() {
     if (rel.dot(n) > 0) n.negate(); // approach from either side: n points from the soldier into the wall
     const t = new THREE.Vector3(n.z, 0, -n.x);
     const lateral = rel.dot(t), dist = -rel.dot(n) - V.wallThickness / 2; // to the near face
-    if (Math.abs(lateral) > w.half - 0.35 || dist < 0.5 || dist > 2.0 || f.dot(n) < Math.cos(deg(40))) continue;
+    if (Math.abs(lateral) > w.half - 0.35 || dist < 0.2 || dist > 2.0 || f.dot(n) < Math.cos(deg(40))) continue;
     const face = new THREE.Vector3(w.x, 0, w.z).addScaledVector(n, -V.wallThickness / 2).addScaledVector(t, lateral);
     return { start: face.addScaledVector(n, -V.wallFront), yaw: Math.atan2(n.x, n.z), n };
   }
@@ -525,6 +698,21 @@ function startLeapNow(baseName) {
   loco.crossFadeTo(a, 0.05, false);
   sim.base = name; current = a; sim.jumping = 'leap'; sim.leapBase = baseName; sim.pendingLeap = null;
   return true;
+}
+
+/** Keep the character root on the ground: eases up steps/slopes, falls off tall ledges. */
+function followGround(dt) {
+  const p = S.group.position, f = new THREE.Vector3(Math.sin(sim.yaw), 0, Math.cos(sim.yaw));
+  // average a little ahead and behind so stairs give a smooth climb of the pelvis
+  // (samples beyond a ledge - more than a step away from the centre height - are ignored)
+  const c = groundH(p.x, p.z);
+  const near = (h) => (Math.abs(h - c) <= STEP_MAX ? h : c);
+  const g = (c * 2 + near(groundH(p.x + f.x * 0.2, p.z + f.z * 0.2)) + near(groundH(p.x - f.x * 0.2, p.z - f.z * 0.2))) / 4;
+  const gMax = Math.max(c, g);
+  if (p.y - gMax > 0.5 || sim.falling) {
+    sim.falling = true; sim.vy = (sim.vy || 0) - 9.81 * dt; p.y += sim.vy * dt;
+    if (p.y <= g) { p.y = g; sim.vy = 0; sim.falling = false; }
+  } else { p.y += (g - p.y) * Math.min(1, dt * 14); sim.vy = 0; }
 }
 
 function startJump() {
@@ -688,8 +876,17 @@ function updatePlay(dt) {
   sim.moveOff = (sim.moveOff || 0) + wrapAngle(moveOff - (sim.moveOff || 0)) * Math.min(1, dt * 12);
   sim.speed += (speed - sim.speed) * Math.min(1, dt * 6);
   const dirYaw = sim.yaw + sim.moveOff + (timeScale < 0 ? Math.PI : 0);
+  const prevPos = S.group.position.clone();
   S.group.position.x += Math.sin(dirYaw) * sim.speed * dt;
   S.group.position.z += Math.cos(dirYaw) * sim.speed * dt;
+  collide(S.group.position);
+  // ledges taller than a step block him (slide along them on the free axis)
+  const gNow = groundH(prevPos.x, prevPos.z);
+  if (groundH(S.group.position.x, S.group.position.z) - gNow > STEP_MAX && !sim.jumping) {
+    const tryX = groundH(S.group.position.x, prevPos.z) - gNow <= STEP_MAX, tryZ = groundH(prevPos.x, S.group.position.z) - gNow <= STEP_MAX;
+    if (tryX) S.group.position.z = prevPos.z; else if (tryZ) S.group.position.x = prevPos.x; else { S.group.position.x = prevPos.x; S.group.position.z = prevPos.z; }
+  }
+  followGround(dt);
   S.group.rotation.y = sim.yaw;
 
   // automatic fire: additive recoil layer + effects at the cyclic rate
@@ -832,6 +1029,8 @@ function frame() {
     updatePlay(dt);
     mixer.update(dt);
     applyLowerBodyYaw();
+    if (!sim.vault && !sim.falling && (sim.posture || 'stand') !== 'prone') footIK(dt);
+    else if (sim.falling) sim.pelvisDrop = 0;
     // chase camera: locked behind the soldier (eases only while a vault re-aligns him)
     sim.camYaw = sim.vault ? sim.camYaw + wrapAngle(sim.yaw - sim.camYaw) * Math.min(1, dt * 8) : sim.yaw;
     updatePlayCamera(dt);
