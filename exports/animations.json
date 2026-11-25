@@ -21,9 +21,9 @@
     "events": {}
   },
   "Walk": {
-    "duration": 1.22,
+    "duration": 1.18,
     "loop": true,
-    "inPlaceSpeed": 1.1,
+    "inPlaceSpeed": 1.15,
     "shots": [],
     "events": {}
   },
