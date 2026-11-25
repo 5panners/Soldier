@@ -112,20 +112,21 @@ export function specFrom(st, o = {}) {
 // ------------------------------------------------------------------ gaits
 export const GAITS = {
   walk: {
-    T: 1.10, v: 1.25, stance: 0.62, heelRock: 0.10, heelOff: 0.40, zHS: 0.31, footX: 0.112, toeOut: deg(7),
-    hsPitch: deg(16), toePitch: deg(38), heelRisePow: 1.6, lift: 0.07, liftSkew: 0.75, kickBack: -0.03,
-    swingInset: 0.012, landVy: 0.15, pitchEase: 2.4, swingToe: deg(6),
+    // relaxed patrol walk: ~102 steps/min, soft heel strikes, easy roll-off
+    T: 1.18, v: 1.15, stance: 0.62, heelRock: 0.11, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
+    hsPitch: deg(12), toePitch: deg(32), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
+    swingInset: 0.012, landVy: 0.12, pitchEase: 2.4, swingToe: deg(6),
     hips: (p) => ({
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
       // a touch of 1st harmonic keeps left/right steps from being mirror-perfect
       pos: V3(-0.011 * Math.cos(TAU * (p - 0.30)),
-        0.905 + 0.019 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
-        -0.009 * Math.cos(2 * TAU * (p - 0.30))),
+        0.912 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
+        -0.008 * Math.cos(2 * TAU * (p - 0.30))),
       yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
-      pitch: deg(6) + deg(1.6) * Math.cos(2 * TAU * (p - 0.08)),
+      pitch: deg(5) + deg(1.3) * Math.cos(2 * TAU * (p - 0.08)),
     }),
-    lag: { freq: 3.6, zeta: 0.42, gain: 0.6 },
-    lagX: { freq: 2.6, zeta: 0.5, gain: 0.5 },
+    lag: { freq: 3.1, zeta: 0.38, gain: 0.75 },
+    lagX: { freq: 2.3, zeta: 0.45, gain: 0.6 },
   },
   run: {
     // ~4.3 m/s combat run: 1.5 m steps at ~171 steps/min, ~0.2 s ground contact
@@ -700,8 +701,13 @@ export function buildClipLibrary() {
   clips.push(standingLoop('ADS_Idle', ADS, 4.0, idleLike(ADS, { breath: 0.3, sway: 0.25 })));
 
   // Walking with the rifle at the low ready, upper body stabilised
-  clips.push(locomotion('Walk', GAITS.walk, lively(LR, {
-    pitch: 9, yaw: -12, roll: 1, pelvisYaw0: -4, counter: 0.45, pitchAmp: 1.1, rollAmp: 0.7, clavAmp: 1.6, headPitch: 6, headAmp: 1.3,
+  // relaxed carry for walking: shoulders dropped, muzzle lower and tucked closer to the body
+  const WALK_ST = derive(LR, {
+    mode: { ...LR.mode, rel: qEuler(deg(40), deg(24), deg(-14)), offset: V3(0.0, -0.045, 0.015) },
+    clavicle: { Left: clav('Left', -2, 34), Right: clav('Right', -2, 2) },
+  });
+  clips.push(locomotion('Walk', GAITS.walk, lively(WALK_ST, {
+    pitch: 6, yaw: -11, roll: 1, pelvisYaw0: -4, counter: 0.55, pitchAmp: 1.0, rollAmp: 0.8, clavAmp: 1.4, headPitch: 4, headAmp: 1.1,
   })));
 
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
