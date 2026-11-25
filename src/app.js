@@ -435,8 +435,9 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && !sim.jumping && !sim.vault && (sim.posture || 'stand') === 'stand' && !sim.postureClip) {
     const v = vaultableWall();
     if (v) startVault(v);
-    else if ((sim.base === 'Run' || sim.base === 'Walk') && actions[sim.base].getEffectiveTimeScale() > 0 && (keys.KeyW))
-      sim.pendingLeap = sim.base; // leap on the next footfall, in stride
+    else if ((sim.base === 'Run' || sim.base === 'Walk') && actions[sim.base].getEffectiveTimeScale() > 0 && (keys.KeyW)) {
+      if (!startLeapNow(sim.base)) sim.pendingLeap = sim.base; // else leap on the next footfall
+    }
     else startJump(); // two-footed standing jump only from a standstill
   }
   if (e.code === 'KeyV') sim.eye = !sim.eye;
@@ -506,11 +507,31 @@ function updateVault(dt) {
   sim.speed = 0;
 }
 
+/**
+ * Cut straight into a leap mid-stride. The leap clips begin with exactly the same steps as
+ * the Walk/Run cycle, so if the take-off foot is still on the ground we can enter the leap
+ * at the matching time with no visible change. Returns false if that foot has already left
+ * the ground (then the leap starts at the next heel strike, a fraction of a second later).
+ */
+function startLeapNow(baseName) {
+  const loco = actions[baseName], dur = loco.getClip().duration, f = loco.time / dur;
+  const right = f < 0.5; // phase 0 = right heel strike, 0.5 = left heel strike
+  const name = right ? `${baseName}_Jump` : `${baseName}_Jump_Left`;
+  const offset = ((f - DEFS[name].startPhase + 1) % 1) * dur; // time since that heel strike
+  if (offset > DEFS[name].events.takeoff - 0.03) return false;
+  const a = actions[name];
+  a.reset(); a.setEffectiveWeight(1); a.setEffectiveTimeScale(1); a.play();
+  a.time = offset;
+  loco.crossFadeTo(a, 0.05, false);
+  sim.base = name; current = a; sim.jumping = 'leap'; sim.leapBase = baseName; sim.pendingLeap = null;
+  return true;
+}
+
 function startJump() {
   sim.jumping = true;
   const a = actions.Jump;
   a.reset(); a.setEffectiveWeight(1); a.setEffectiveTimeScale(1); a.play();
-  (sim.base ? actions[sim.base] : current).crossFadeTo(a, 0.12, false);
+  (sim.base ? actions[sim.base] : current).crossFadeTo(a, 0.06, false);
   sim.base = 'Jump'; current = a;
 }
 mixer.addEventListener('finished', (e) => {

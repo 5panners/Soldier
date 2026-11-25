@@ -45,7 +45,7 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 
 * **Viewer** lets you pick any clip, cross-fade between clips, scrub, step frames and change playback speed. You can also show the skeleton or wireframe and switch between camera presets. In-place clips scroll the ground at the clip's speed, so you can check that planted feet stay locked.
 * **Play (WASD)** is a third-person sandbox with a firing range:
-  * `W` / `S`: walk forward / back along the soldier's own facing. `A` / `D`: turn him. The camera never steers him (mouse or arrow keys orbit it, the mouse wheel zooms in and out). `Shift`: run. `Space`: from a walk or run, leap off the next footfall; standing still, a two-footed jump; facing a low wall, vault it.
+  * `W` / `S`: walk forward / back along the soldier's own facing. `A` / `D`: turn him. The camera never steers him (mouse or arrow keys orbit it, the mouse wheel zooms in and out). `Shift`: run. `Space`: from a walk or run, leap at once (or at the very next footfall if the take-off foot has just left the ground); standing still, a two-footed jump; facing a low wall, vault it.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
   * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
   * `V`: first-person eye view. It looks through the optic while aiming down sights, and straight ahead from the eyes otherwise. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
@@ -74,7 +74,7 @@ The clips are not hand-keyed curves. Each frame is a high-level pose (pelvis, ch
    * Knees stay soft through stance, and the left and right steps aren't mirror-perfect.
    * Hip sway and tilt are kept small for a squared-off, loaded-soldier gait.
 8. **Crawl and prone.** The crawl keeps the belly on the ground. Each forearm plants as a ground contact that moves backward at the crawl speed, and the opposite knee is drawn up sideways along the ground, then straightens as the body slides over it. Chest pitch is solved each frame so the forearms reach the ground, and the rifle stays cradled across both forearms. Getting down to prone and back up is a multi-key motion: crouch → both knees → onto the forearms → legs back → aim. It interpolates smoothly through every key.
-9. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.66 s airtime, about 0.53 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
+9. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.82 s airtime, about 0.8 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
 
 The biomechanics and marksmanship references behind the numbers are listed in [docs/REFERENCES.md](docs/REFERENCES.md).
 

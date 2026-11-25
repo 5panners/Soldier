@@ -120,7 +120,7 @@ export const GAITS = {
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
       // a touch of 1st harmonic keeps left/right steps from being mirror-perfect
       pos: V3(-0.011 * Math.cos(TAU * (p - 0.30)),
-        0.912 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
+        0.927 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
         -0.008 * Math.cos(2 * TAU * (p - 0.30))),
       yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
       pitch: deg(2) + deg(1.2) * Math.cos(2 * TAU * (p - 0.08)),
@@ -347,10 +347,10 @@ function transition(name, a, b, duration, arc = null, meta = {}) {
  */
 function jumpTimeline() {
   const st = STANCES.lowReady;
-  const T = { crouch0: 0.10, crouch1: 0.42, take: 0.64, land: 1.30, low: 1.50, end: 2.05 }; // 0.66 s flight
+  const T = { crouch0: 0.0, crouch1: 0.15, take: 0.31, land: 1.13, low: 1.33, end: 1.85 }; // quick dip, 0.82 s flight
   const flight = T.land - T.take;
   const v0 = (G * flight) / 2;           // take-off velocity for symmetric flight
-  const yTake = 1.00, yLow = 0.69, yLand = 0.71, yStand = st.hipsPos.y;
+  const yTake = 1.00, yLow = 0.76, yLand = 0.69, yStand = st.hipsPos.y;
   const hipsY = (t) => {
     if (t < T.crouch0) return yStand;
     if (t < T.crouch1) return hermite(yStand, 0, yLow, 0, T.crouch1 - T.crouch0, (t - T.crouch0) / (T.crouch1 - T.crouch0));
@@ -428,7 +428,7 @@ function jumpClips() {
   const acc = secondDerivative(ys, DT, false).map((a, i) => {
     const t = i * DT; return t > J.T.take && t < J.T.land ? a + G : a; // weapon is also in free fall
   });
-  const lag = oneShotSpring(acc, DT, 4.5, 0.5).map((x) => Math.max(-0.03, Math.min(0.03, x * 0.5)));
+  const lag = oneShotSpring(acc, DT, 4.5, 0.6).map((x) => Math.max(-0.015, Math.min(0.015, x * 0.3)));
   const full = [];
   for (let i = 0; i <= N; i++) full.push(jumpFrame(i * DT, J, { lag: lag[i] }));
   const iTake = Math.round(J.T.take * FPS), iLand = Math.round(J.T.land * FPS);
@@ -457,7 +457,7 @@ function jumpClips() {
  * heel strike of the take-off foot and ends one full stride later, so it hands straight
  * back to Run at the same phase.
  */
-function runJumpClip(name, startPhase, upper, F = 0.70) {
+function runJumpClip(name, startPhase, upper, F = 0.82) {
   const g = GAITS.run, T = g.T, sf = g.stance;
   const flightFrac = 0.5 - sf;               // fraction of the cycle in each normal flight
   const tTO = sf * T, tLand = tTO + F, tEnd = tLand + (0.5 - flightFrac + 0.5 - sf) * T + flightFrac * T;
@@ -535,9 +535,13 @@ function runJumpClip(name, startPhase, upper, F = 0.70) {
  * trailing leg swings through and the clip ends at the same walk phase it started on.
  * Each foot runs on its own time->phase map, so no planted foot ever slides.
  */
-function walkJumpClip(name, startPhase, upper, F = 0.46) {
+function walkJumpClip(name, startPhase, upper, F = 0.58, tPush = 0.30) {
   const g = GAITS.walk, T = g.T, sf = g.stance; // sf: stance fraction (0.62)
-  const tTO = sf * T;                       // take-off foot leaves the ground
+  // the take-off foot pushes off early, partway through its stance (a hop out of the walk),
+  // so the leap happens within ~0.3 s of a heel strike instead of waiting for toe-off
+  const sA = tPush / T;
+  const gA = { ...g, stance: sA, heelOff: Math.min(g.heelOff, sA * 0.45), heelRock: Math.min(g.heelRock, sA * 0.3), toePitch: deg(42) };
+  const tTO = tPush;                        // take-off foot leaves the ground
   const tOtherOff = (sf - 0.5) * T;         // the other foot's toe-off (start of its swing)
   const tL = tTO + F;                       // other foot lands
   const tR = tL + 0.5 * T;                  // take-off foot lands again -> back in the walk cycle
@@ -547,7 +551,7 @@ function walkJumpClip(name, startPhase, upper, F = 0.46) {
   // stretched swings leave and arrive at the normal phase rate (Hermite time warp), so a
   // foot never changes speed while its toe is still brushing the ground
   const warp = (p0, p1, D, u) => hermite(p0, 1 / T, p1, 1 / T, D, Math.min(1, Math.max(0, u)));
-  const phA = (t) => (t <= tTO ? t / T : warp(sf, 1, tR - tTO, (t - tTO) / (tR - tTO)));
+  const phA = (t) => (t <= tTO ? t / T : warp(sA, 1, tR - tTO, (t - tTO) / (tR - tTO)));
   // other foot: finish its stance, swing stretched to land at tL, then normal stance
   const phB = (t) => {
     if (t <= tOtherOff) return 0.5 + t / T;
@@ -559,17 +563,17 @@ function walkJumpClip(name, startPhase, upper, F = 0.46) {
     return Math.min(h.pos.y, hipsReachBound(h.pos, q, { Left: gaitFoot(ph + 0.5, g, 1), Right: gaitFoot(ph, g, -1) }));
   };
   const dy = (ph) => (yWalk(ph + 0.002) - yWalk(ph - 0.002)) / (0.004 * T);
-  const v0 = (G * F) / 2, yTO = yWalk(s0 + sf);
+  const v0 = (G * F) / 2, yTO = yWalk(s0 + sA);
   const sideA = startPhase < 0.25 ? -1 : 1; // phase 0 = right heel strike -> right foot takes off
   const N = Math.round(duration * FPS), rows = [];
   for (let n = 0; n <= N; n++) {
     const t = (n / N) * duration;
     // each foot on its own gait phase (0 = its own heel strike)
-    const A = gaitFoot(phA(t), g, sideA), B = gaitFoot(phB(t), g, -sideA);
-    const body = t <= tTO ? s0 + t / T : t <= tL ? s0 + sf : s0 + sf + (1 - sf) * (t - tL) / (tR - tL);
+    const A = gaitFoot(phA(t), t <= tR ? gA : g, sideA), B = gaitFoot(phB(t), g, -sideA);
+    const body = t <= tTO ? s0 + t / T : t <= tL ? s0 + sA : s0 + sA + (1 - sA) * (t - tL) / (tR - tL);
     const h = g.hips(body), quat = qEuler(h.pitch, h.yaw, h.roll);
     let y;
-    const tLoad = tTO - 0.26; // the last ~quarter second before take-off loads and drives
+    const tLoad = Math.max(0, tTO - 0.22); // a quick load and drive just before take-off
     if (t <= tLoad) y = yWalk(body);
     else if (t <= tTO) {
       const u = (t - tLoad) / (tTO - tLoad), ph0 = s0 + tLoad / T;
