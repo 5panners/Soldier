@@ -444,7 +444,7 @@ function footIK(dt) {
     // the leg's current bend, which flips sideways when the foot is raised onto a step
     const side = sd === 'Left' ? 1 : -1;
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(charQ(B.Hips)).setY(0).normalize();
-    const pole = fwd.add(new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(0.12 * side)).normalize();
+    const pole = fwd.add(new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(0.04 * side)).normalize();
     void knee;
     const ik = twoBoneIK(root, target, l1, l2, pole);
     const bindPole = new THREE.Vector3(0, 0, 1);

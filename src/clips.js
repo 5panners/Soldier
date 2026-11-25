@@ -109,6 +109,15 @@ export function specFrom(st, o = {}) {
   return spec;
 }
 
+/**
+ * Knee direction for moving clips: straight along the direction of travel with a tiny outward
+ * bias. In real gait the knees track the travel direction while the pelvis rotates (the thigh
+ * rotates to compensate); aiming them along the pelvis or the foot made them swing outward.
+ */
+function kneeAim(_pelvisYaw, side) {
+  return V3(0.04 * side, 0, 1).normalize();
+}
+
 // ------------------------------------------------------------------ gaits
 export const GAITS = {
   walk: {
@@ -226,8 +235,8 @@ function locomotion(name, g, upper, meta = {}) {
     const u = upper(r.p, r.h);
     const st = derive(u.st, { hipsPos: V3(r.h.pos.x, ys[i], r.h.pos.z), hipsQ: r.quat });
     const kneePole = {
-      Left: V3(0, 0, 1).applyQuaternion(r.feet.Left.quat).add(V3(0.12, 0, 0)).normalize(),
-      Right: V3(0, 0, 1).applyQuaternion(r.feet.Right.quat).add(V3(-0.12, 0, 0)).normalize(),
+      Left: kneeAim(r.h.yaw, 1),
+      Right: kneeAim(r.h.yaw, -1),
     };
     const spec = specFrom(st, { feet: r.feet, kneePole, lag: lag[i], lagX: lagX[i], headWorld: u.headWorld, trigger: u.trigger });
     spec.planted = { Left: r.feet.Left.planted, Right: r.feet.Right.planted };
@@ -517,8 +526,8 @@ function runJumpClip(name, startPhase, upper, F = 0.82) {
     const u = upper(r.ph, r.h);
     const st = derive(u.st, { hipsPos: V3(r.h.pos.x, r.y, r.h.pos.z), hipsQ: r.quat });
     const kneePole = {
-      Left: V3(0, 0, 1).applyQuaternion(r.feet.Left.quat).add(V3(0.12, 0, 0)).normalize(),
-      Right: V3(0, 0, 1).applyQuaternion(r.feet.Right.quat).add(V3(-0.12, 0, 0)).normalize(),
+      Left: kneeAim(r.h.yaw, 1),
+      Right: kneeAim(r.h.yaw, -1),
     };
     const spec = specFrom(st, { feet: r.feet, kneePole, lag: lag[i], headWorld: u.headWorld });
     spec.planted = { Left: r.feet.Left.planted, Right: r.feet.Right.planted };
@@ -604,8 +613,8 @@ function walkJumpClip(name, startPhase, upper, F = 0.58, tPush = 0.30) {
     const u = upper(r.ph, r.h);
     const st = derive(u.st, { hipsPos: V3(r.h.pos.x, r.y, r.h.pos.z), hipsQ: r.quat });
     const kneePole = {
-      Left: V3(0, 0, 1).applyQuaternion(r.feet.Left.quat).add(V3(0.12, 0, 0)).normalize(),
-      Right: V3(0, 0, 1).applyQuaternion(r.feet.Right.quat).add(V3(-0.12, 0, 0)).normalize(),
+      Left: kneeAim(r.h.yaw, 1),
+      Right: kneeAim(r.h.yaw, -1),
     };
     const spec = specFrom(st, { feet: r.feet, kneePole, lag: lag[i], headWorld: u.headWorld });
     spec.planted = { Left: r.feet.Left.planted, Right: r.feet.Right.planted };
