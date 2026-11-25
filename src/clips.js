@@ -112,21 +112,21 @@ export function specFrom(st, o = {}) {
 // ------------------------------------------------------------------ gaits
 export const GAITS = {
   walk: {
-    // relaxed patrol walk: ~102 steps/min, soft heel strikes, easy roll-off
-    T: 1.18, v: 1.15, stance: 0.62, heelRock: 0.11, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
-    hsPitch: deg(12), toePitch: deg(32), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
-    swingInset: 0.012, landVy: 0.12, pitchEase: 2.4, swingToe: deg(6),
+    // relaxed patrol walk: ~98 steps/min, nearly straight knees through stance, soft heel
+    // strikes, easy roll-off (the pelvis rides high; only the reach limit lowers it)
+    T: 1.22, v: 1.10, stance: 0.62, heelRock: 0.11, heelOff: 0.40, zHS: 0.29, footX: 0.11, toeOut: deg(8),
+    hsPitch: deg(11), toePitch: deg(30), heelRisePow: 1.7, lift: 0.05, liftSkew: 0.75, kickBack: -0.025,
+    swingInset: 0.012, landVy: 0.10, pitchEase: 2.4, swingToe: deg(5),
     hips: (p) => ({
-      // vertical: lowest just after heel strike (loading response), highest at mid-stance;
-      // a touch of 1st harmonic keeps left/right steps from being mirror-perfect
       pos: V3(-0.011 * Math.cos(TAU * (p - 0.30)),
-        0.912 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
+        0.952 + 0.014 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
         -0.008 * Math.cos(2 * TAU * (p - 0.30))),
       yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
-      pitch: deg(5) + deg(1.3) * Math.cos(2 * TAU * (p - 0.08)),
+      pitch: deg(4) + deg(1.2) * Math.cos(2 * TAU * (p - 0.08)),
     }),
-    lag: { freq: 3.1, zeta: 0.38, gain: 0.75 },
-    lagX: { freq: 2.3, zeta: 0.45, gain: 0.6 },
+    reach: 0.993, // straighter stance leg than the other gaits
+    lag: { freq: 2.9, zeta: 0.36, gain: 0.8 },
+    lagX: { freq: 2.2, zeta: 0.42, gain: 0.65 },
   },
   run: {
     // ~4.3 m/s combat run: 1.5 m steps at ~171 steps/min, ~0.2 s ground contact
@@ -166,7 +166,8 @@ export const GAITS = {
 };
 for (const g of Object.values(GAITS)) g.L = g.v * g.T;
 
-function hipsReachBound(hipsPos, hipsQ, feet) {
+function hipsReachBound(hipsPos, hipsQ, feet, reach = 0.985) {
+  const LEG_R = (LEG_UPPER + LEG_LOWER) * reach;
   // only feet on the ground limit the pelvis height; a swinging leg simply bends or reaches
   let bound = Infinity;
   for (const s of ['Left', 'Right']) {
@@ -195,9 +196,10 @@ function locomotion(name, g, upper, meta = {}) {
     rows.push({ p, feet: { Left: L, Right: R }, h, quat, y: h.pos.y });
   }
   // keep the legs within reach (slight knee bend everywhere), then smooth periodically
-  let ys = rows.map((r) => Math.min(r.y, hipsReachBound(r.h.pos, r.quat, r.feet)));
+  const RF = g.reach ?? 0.985;
+  let ys = rows.map((r) => Math.min(r.y, hipsReachBound(r.h.pos, r.quat, r.feet, RF)));
   ys = periodicSmooth(ys, 1.5);
-  ys = ys.map((y, i) => Math.min(y, hipsReachBound(rows[i].h.pos, rows[i].quat, rows[i].feet) + 0.002));
+  ys = ys.map((y, i) => Math.min(y, hipsReachBound(rows[i].h.pos, rows[i].quat, rows[i].feet, RF) + 0.002));
   ys = periodicSmooth(ys, 0.8);
   // a swinging foot reaching for the next contact may be a little beyond the extended leg:
   // pull it back along the hip->foot line with a soft limit (no kink, no visible change)
@@ -704,10 +706,10 @@ export function buildClipLibrary() {
   // relaxed carry for walking: shoulders dropped, muzzle lower and tucked closer to the body
   const WALK_ST = derive(LR, {
     mode: { ...LR.mode, rel: qEuler(deg(40), deg(24), deg(-14)), offset: V3(0.0, -0.045, 0.015) },
-    clavicle: { Left: clav('Left', -2, 34), Right: clav('Right', -2, 2) },
+    clavicle: { Left: clav('Left', -4, 39), Right: clav('Right', -4, 2) },
   });
   clips.push(locomotion('Walk', GAITS.walk, lively(WALK_ST, {
-    pitch: 6, yaw: -11, roll: 1, pelvisYaw0: -4, counter: 0.55, pitchAmp: 1.0, rollAmp: 0.8, clavAmp: 1.4, headPitch: 4, headAmp: 1.1,
+    pitch: 4, yaw: -10, roll: 1, pelvisYaw0: -4, counter: 0.6, pitchAmp: 0.9, rollAmp: 0.8, clavAmp: 1.3, headPitch: 2, headAmp: 1.0,
   })));
 
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
