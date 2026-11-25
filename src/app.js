@@ -329,7 +329,7 @@ const GROUPS = [
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
   ['Prone', ['Prone_Idle', 'Prone_Fire', 'Prone_Fire_Auto', 'Prone_Crawl', 'Stand_To_Prone', 'Prone_To_Stand']],
-  ['Jump & vault', ['Jump', 'Run_Jump', 'Run_Jump_Left', 'Jump_Start', 'Jump_Air', 'Jump_Land', 'Vault']],
+  ['Jump & vault', ['Jump', 'Walk_Jump', 'Walk_Jump_Left', 'Run_Jump', 'Run_Jump_Left', 'Jump_Start', 'Jump_Air', 'Jump_Land', 'Vault']],
   ['Poses', ['Idle_Pose', 'ADS_Pose', 'HipFire_Pose', 'Crouch_Pose', 'Crouch_ADS_Pose', 'Prone_Pose']],
 ];
 
@@ -399,7 +399,7 @@ function setMode(m) {
   $('#modeview').classList.toggle('on', m === 'view');
   controls.enabled = m === 'view';
   if (m === 'play') {
-    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingRunJump = false; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
+    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
     sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null;
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
@@ -435,8 +435,9 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && !sim.jumping && !sim.vault && (sim.posture || 'stand') === 'stand' && !sim.postureClip) {
     const v = vaultableWall();
     if (v) startVault(v);
-    else if (sim.base === 'Run' && sim.speed > 2) sim.pendingRunJump = true; // leap on the next footfall
-    else startJump();
+    else if ((sim.base === 'Run' || sim.base === 'Walk') && actions[sim.base].getEffectiveTimeScale() > 0 && (keys.KeyW))
+      sim.pendingLeap = sim.base; // leap on the next footfall, in stride
+    else startJump(); // two-footed standing jump only from a standstill
   }
   if (e.code === 'KeyV') sim.eye = !sim.eye;
   if (e.code === 'KeyL') sim.laser = !sim.laser;
@@ -508,15 +509,14 @@ function startJump() {
 }
 mixer.addEventListener('finished', (e) => {
   if (mode === 'play' && e.action === actions.Jump) { sim.jumping = false; sim.base = 'Jump'; }
-  if (mode === 'play' && (e.action === actions.Run_Jump || e.action === actions.Run_Jump_Left) && sim.jumping === 'run') {
-    // hand straight back to the run cycle at the phase the leap ended on
-    const end = DEFS[e.action.getClip().name].endPhase;
+  if (mode === 'play' && sim.jumping === 'leap' && /_Jump(_Left)?$/.test(e.action.getClip().name)) {
+    // hand straight back to the walk/run cycle at the phase the leap ended on
+    const end = DEFS[e.action.getClip().name].endPhase, loco = actions[sim.leapBase];
     sim.jumping = false;
-    const run = actions.Run;
-    run.reset(); run.setEffectiveWeight(1); run.setEffectiveTimeScale(1); run.play();
-    run.time = end * run.getClip().duration;
-    e.action.crossFadeTo(run, 0.06, false);
-    sim.base = 'Run'; current = run;
+    loco.reset(); loco.setEffectiveWeight(1); loco.setEffectiveTimeScale(1); loco.play();
+    loco.time = end * loco.getClip().duration;
+    e.action.crossFadeTo(loco, 0.06, false);
+    sim.base = sim.leapBase; current = loco;
   }
   if (mode === 'play' && e.action === actions.Vault && sim.vault) {
     // the clip carries the body 2.5 m forward (root motion in Hips): move the character there
@@ -537,23 +537,22 @@ const POSTURE_T = {
 };
 function updatePlay(dt) {
   if (sim.vault) { updateVault(dt); return; }
-  // queued running leap: start it exactly at the next heel strike so the stride lines up
-  if (sim.pendingRunJump) {
-    const run = actions.Run, f = run.time / run.getClip().duration, prev = sim.lastRunPhase ?? f;
+  // queued walking/running leap: start it exactly at the next heel strike so the stride lines up
+  if (sim.pendingLeap) {
+    const baseName = sim.pendingLeap, loco = actions[baseName], f0 = loco.time / loco.getClip().duration, prev = sim.lastLocoPhase ?? f0;
     const crossed = (a, b, x) => (a <= b ? a < x && b >= x : a < x || b >= x);
-    if (sim.base !== 'Run') sim.pendingRunJump = false;
-    else if (crossed(prev, f, 0.5) || crossed(prev, f, 0.999999)) {
-      const name = crossed(prev, f, 0.5) ? 'Run_Jump_Left' : 'Run_Jump';
-      const startPhase = DEFS[name].startPhase;
+    if (sim.base !== baseName) sim.pendingLeap = null;
+    else if (crossed(prev, f0, 0.5) || crossed(prev, f0, 0.999999)) {
+      const name = crossed(prev, f0, 0.5) ? `${baseName}_Jump_Left` : `${baseName}_Jump`;
       const a = actions[name];
       a.reset(); a.setEffectiveWeight(1); a.setEffectiveTimeScale(1); a.play();
-      // begin the leap as far in as the run has already gone past the heel strike
-      a.time = Math.max(0, ((f - startPhase + 1) % 1) * run.getClip().duration);
-      run.crossFadeTo(a, 0.05, false);
-      sim.base = name; current = a; sim.jumping = 'run'; sim.pendingRunJump = false;
+      // begin the leap as far in as the cycle has already gone past the heel strike
+      a.time = Math.max(0, ((f0 - DEFS[name].startPhase + 1) % 1) * loco.getClip().duration);
+      loco.crossFadeTo(a, 0.05, false);
+      sim.base = name; current = a; sim.jumping = 'leap'; sim.leapBase = baseName; sim.pendingLeap = null;
     }
-    sim.lastRunPhase = f;
-  } else sim.lastRunPhase = undefined;
+    sim.lastLocoPhase = f0;
+  } else sim.lastLocoPhase = undefined;
   // arrow keys orbit the camera (same as moving the mouse): left/right turn, up/down tilt
   const orbitX = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
   const orbitY = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
@@ -562,13 +561,12 @@ function updatePlay(dt) {
   // desired movement in camera frame
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   const r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const moving = f !== 0 || r !== 0;
+  const moving = f !== 0; // W/S move along the soldier's own facing; A/D turn him (camera-independent)
   const posture = sim.posture || 'stand';
   const run = (keys.ShiftLeft || keys.ShiftRight) && sim.aim === 'none' && f > 0 && posture === 'stand';
   let aimMode = sim.fire && sim.aim === 'none' ? 'hip' : sim.aim;
   if (posture !== 'stand' && aimMode === 'hip') aimMode = 'ads'; // crouched/prone fire from the shoulder
   if (posture === 'prone') aimMode = 'ads';
-  const moveYaw = sim.camYaw + Math.atan2(-r, f); // camera looks toward +Z at yaw 0
 
   // posture transition in progress?
   if (sim.postureClip) {
@@ -592,28 +590,21 @@ function updatePlay(dt) {
     crouch: { idle: 'Crouch_Idle', walk: 'Crouch_Walk', ads: 'Crouch_ADS_Idle', adsWalk: 'Crouch_ADS_Walk', hip: 'Crouch_ADS_Idle', hipWalk: 'Crouch_ADS_Walk' },
     prone: { idle: 'Prone_Idle', walk: 'Prone_Crawl', ads: 'Prone_Idle', adsWalk: 'Prone_Crawl', hip: 'Prone_Idle', hipWalk: 'Prone_Crawl' } }[posture];
   if (!sim.jumping) {
+    // A/D turn the soldier; the camera never steers him
+    const turnRate = posture === 'prone' ? 0.9 : run ? 1.6 : aimMode !== 'none' ? 1.6 : 2.2;
+    if (r !== 0 && !sim.postureClip) sim.yaw -= r * turnRate * dt;
+    const back = f < 0;
     if (posture === 'prone') {
-      if (moving) {
-        sim.yaw = sim.yaw + wrapAngle(moveYaw - sim.yaw) * Math.min(1, dt * 2.5); // slow pivot on the elbows
-        clip = P.walk; speed = DEFS[clip].speed;
-      } else {
-        clip = P.idle; // free-look: orbiting the camera never turns the body
-      }
+      if (moving) { clip = P.walk; speed = DEFS[clip].speed; if (back) timeScale = -1; }
+      else clip = P.idle;
     } else if (aimMode !== 'none') {
-      // the body only turns toward the camera while moving; standing still, orbiting is
-      // free-look (the upper body still bends toward the crosshair within its limits)
-      if (moving) sim.yaw = sim.yaw + wrapAngle(sim.camYaw - sim.yaw) * Math.min(1, dt * 14);
       if (moving) {
         clip = aimMode === 'ads' ? P.adsWalk : P.hipWalk;
-        let d = wrapAngle(moveYaw - sim.yaw);
-        if (Math.abs(d) > deg(100)) { timeScale = -1; d = wrapAngle(d - Math.PI); } // backpedal
-        lowerYaw = THREE.MathUtils.clamp(d, -deg(80), deg(80));
-        speed = DEFS[clip].speed;
+        speed = DEFS[clip].speed; if (back) timeScale = -1;
       } else clip = aimMode === 'ads' ? P.ads : P.hip;
     } else if (moving) {
-      sim.yaw = sim.yaw + wrapAngle(moveYaw - sim.yaw) * Math.min(1, dt * (run ? 6 : 8));
       clip = run ? 'Run' : P.walk;
-      speed = DEFS[clip].speed;
+      speed = DEFS[clip].speed; if (back) timeScale = -1;
     } else clip = P.idle;
     const prevAim = sim.lastAim || 'none';
     // standing / crouched mode changes use the authored transition clips
@@ -627,7 +618,7 @@ function updatePlay(dt) {
   } else {
     // running leap keeps the run speed (its planted feet move at exactly that speed);
     // the standing jump is done on the spot, so the feet never slide
-    speed = sim.jumping === 'run' ? DEFS.Run.speed : 0;
+    speed = sim.jumping === 'leap' ? DEFS[sim.leapBase].speed : 0;
   }
   sim.lowerYaw += (lowerYaw - sim.lowerYaw) * Math.min(1, dt * 10);
   sim.speed += (speed - sim.speed) * Math.min(1, dt * 6);

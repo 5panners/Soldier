@@ -457,7 +457,7 @@ function jumpClips() {
  * heel strike of the take-off foot and ends one full stride later, so it hands straight
  * back to Run at the same phase.
  */
-function runJumpClip(name, startPhase, upper, F = 0.44) {
+function runJumpClip(name, startPhase, upper, F = 0.58) {
   const g = GAITS.run, T = g.T, sf = g.stance;
   const flightFrac = 0.5 - sf;               // fraction of the cycle in each normal flight
   const tTO = sf * T, tLand = tTO + F, tEnd = tLand + (0.5 - flightFrac + 0.5 - sf) * T + flightFrac * T;
@@ -489,15 +489,15 @@ function runJumpClip(name, startPhase, upper, F = 0.44) {
       // landing: the downward speed is absorbed by the leg (a damped dip of ~8 cm) while the
       // pelvis blends back onto the normal run curve
       const tau = t - tLand, w = smoother(tau / (sf * T * 1.4));
-      const base = lerp(yTO + (yRun(s0 + 0.5) - yTO) * 0, yRun(ph), w);
-      y = base - v0 * tau * Math.exp(-tau / 0.09);
+      const base = lerp(yTO, yRun(ph), w);
+      y = base - v0 * tau * Math.exp(-tau / 0.085);
     }
     // planted feet must stay reachable (the take-off push straightens the leg)
     y = Math.min(y, hipsReachBound(h.pos, quat, { Left: L, Right: R }, 0.997));
     // airborne legs ride up with the body (they were planned for normal run height) and the
     // knees tuck a little through the stretched flight; both fade to zero at the contacts
     const air = t > tTO && t < tLand ? Math.sin(Math.PI * (t - tTO) / F) : 0;
-    const lift = (y - yRun(ph)) * Math.sqrt(air) + 0.08 * air;
+    const lift = (y - yRun(ph)) * Math.sqrt(air) + 0.14 * air; // strong knee drive / tuck
     for (const f of [R, L]) if (!f.planted) f.pos.y += lift;
     // a foot in the air that ends up beyond the extended leg is eased back within reach
     const reachMax = (LEG_UPPER + LEG_LOWER) * 0.999, soft = 0.03, hp = V3(h.pos.x, y, h.pos.z);
@@ -526,6 +526,89 @@ function runJumpClip(name, startPhase, upper, F = 0.44) {
   });
   return { name, duration, loop: false, speed: g.v, frames, startPhase, endPhase: startPhase,
     events: { takeoff: +tTO.toFixed(3), land: +tLand.toFixed(3) } };
+}
+
+/**
+ * Walking leap in the style of the running jump, built from the walk cycle: the take-off
+ * foot's stance runs at the normal walk rate (planted feet move at exactly walk speed), the
+ * other leg's swing is lengthened so it lands only after F seconds of real flight, then the
+ * trailing leg swings through and the clip ends at the same walk phase it started on.
+ * Each foot runs on its own time->phase map, so no planted foot ever slides.
+ */
+function walkJumpClip(name, startPhase, upper, F = 0.34) {
+  const g = GAITS.walk, T = g.T, sf = g.stance; // sf: stance fraction (0.62)
+  const tTO = sf * T;                       // take-off foot leaves the ground
+  const tOtherOff = (sf - 0.5) * T;         // the other foot's toe-off (start of its swing)
+  const tL = tTO + F;                       // other foot lands
+  const tR = tL + 0.5 * T;                  // take-off foot lands again -> back in the walk cycle
+  const duration = tR;
+  const s0 = startPhase;
+  // take-off foot: stance at normal rate, then a swing stretched to land at tR
+  // stretched swings leave and arrive at the normal phase rate (Hermite time warp), so a
+  // foot never changes speed while its toe is still brushing the ground
+  const warp = (p0, p1, D, u) => hermite(p0, 1 / T, p1, 1 / T, D, Math.min(1, Math.max(0, u)));
+  const phA = (t) => (t <= tTO ? t / T : warp(sf, 1, tR - tTO, (t - tTO) / (tR - tTO)));
+  // other foot: finish its stance, swing stretched to land at tL, then normal stance
+  const phB = (t) => {
+    if (t <= tOtherOff) return 0.5 + t / T;
+    if (t <= tL) return 0.5 + warp(sf - 0.5 + 0.5, 1, tL - tOtherOff, (t - tOtherOff) / (tL - tOtherOff)) - 0.5 + 0.0;
+    return 1.0 + (t - tL) / T;
+  };
+  const yWalk = (ph) => {
+    const h = g.hips(ph), q = qEuler(h.pitch, h.yaw, h.roll);
+    return Math.min(h.pos.y, hipsReachBound(h.pos, q, { Left: gaitFoot(ph + 0.5, g, 1), Right: gaitFoot(ph, g, -1) }));
+  };
+  const dy = (ph) => (yWalk(ph + 0.002) - yWalk(ph - 0.002)) / (0.004 * T);
+  const v0 = (G * F) / 2, yTO = yWalk(s0 + sf);
+  const sideA = startPhase < 0.25 ? -1 : 1; // phase 0 = right heel strike -> right foot takes off
+  const N = Math.round(duration * FPS), rows = [];
+  for (let n = 0; n <= N; n++) {
+    const t = (n / N) * duration;
+    // each foot on its own gait phase (0 = its own heel strike)
+    const A = gaitFoot(phA(t), g, sideA), B = gaitFoot(phB(t), g, -sideA);
+    const body = t <= tTO ? s0 + t / T : t <= tL ? s0 + sf : s0 + sf + (1 - sf) * (t - tL) / (tR - tL);
+    const h = g.hips(body), quat = qEuler(h.pitch, h.yaw, h.roll);
+    let y;
+    const tLoad = tTO - 0.26; // the last ~quarter second before take-off loads and drives
+    if (t <= tLoad) y = yWalk(body);
+    else if (t <= tTO) {
+      const u = (t - tLoad) / (tTO - tLoad), ph0 = s0 + tLoad / T;
+      y = hermite(yWalk(ph0), dy(ph0), yTO, v0, tTO - tLoad, u) - 0.03 * Math.sin(Math.PI * u);
+    } else if (t <= tL) { const tau = t - tTO; y = yTO + v0 * tau - 0.5 * G * tau * tau; }
+    else {
+      const tau = t - tL, w = smoother(tau / (0.35 * T));
+      y = lerp(yTO, yWalk(body), w) - v0 * tau * Math.exp(-tau / 0.08);
+    }
+    const feet = sideA < 0 ? { Right: A, Left: B } : { Left: A, Right: B };
+    y = Math.min(y, hipsReachBound(h.pos, quat, feet, 0.997));
+    const air = t > tTO && t < tL ? Math.sin(Math.PI * (t - tTO) / F) : 0;
+    const lift = (y - yWalk(body)) * Math.sqrt(air) + 0.07 * air;
+    const reachMax = (LEG_UPPER + LEG_LOWER) * 0.999, soft = 0.03, hp = V3(h.pos.x, y, h.pos.z);
+    for (const sd of ['Left', 'Right']) {
+      const f = feet[sd];
+      if (f.planted) continue;
+      f.pos.y += lift;
+      const j = BIND_LOCAL[`${sd}UpLeg`].clone().applyQuaternion(quat).add(hp);
+      const d = f.pos.distanceTo(j), knee = reachMax - soft;
+      if (d > knee) f.pos = j.clone().add(f.pos.clone().sub(j).multiplyScalar((knee + soft * (1 - Math.exp(-(d - knee) / soft))) / d));
+    }
+    rows.push({ t, ph: body, h, quat, y, feet });
+  }
+  const acc = secondDerivative(rows.map((r) => r.y), DT, false).map((a, i) => (rows[i].t > tTO && rows[i].t < tL ? a + G : a));
+  const lag = oneShotSpring(acc, DT, 4.0, 0.6).map((x) => Math.max(-0.015, Math.min(0.015, x * 0.3)));
+  const frames = rows.map((r, i) => {
+    const u = upper(r.ph, r.h);
+    const st = derive(u.st, { hipsPos: V3(r.h.pos.x, r.y, r.h.pos.z), hipsQ: r.quat });
+    const kneePole = {
+      Left: V3(0, 0, 1).applyQuaternion(r.feet.Left.quat).add(V3(0.12, 0, 0)).normalize(),
+      Right: V3(0, 0, 1).applyQuaternion(r.feet.Right.quat).add(V3(-0.12, 0, 0)).normalize(),
+    };
+    const spec = specFrom(st, { feet: r.feet, kneePole, lag: lag[i], headWorld: u.headWorld });
+    spec.planted = { Left: r.feet.Left.planted, Right: r.feet.Right.planted };
+    return spec;
+  });
+  return { name, duration, loop: false, speed: g.v, frames, startPhase, endPhase: startPhase,
+    events: { takeoff: +tTO.toFixed(3), land: +tL.toFixed(3) } };
 }
 
 // ------------------------------------------------------------------ natural upper body
@@ -786,9 +869,13 @@ export function buildClipLibrary() {
     mode: { ...LR.mode, rel: qEuler(deg(40), deg(24), deg(-14)), offset: V3(0.0, -0.045, 0.015) },
     clavicle: { Left: clav('Left', -2, 34), Right: clav('Right', -2, 2) },
   });
-  clips.push(locomotion('Walk', GAITS.walk, lively(WALK_ST, {
+  const WALK_UPPER = lively(WALK_ST, {
     pitch: 1, yaw: -11, roll: 1, pelvisYaw0: -4, counter: 0.55, pitchAmp: 0.9, rollAmp: 0.8, clavAmp: 1.4, headPitch: 3, headAmp: 1.1,
-  })));
+  });
+  clips.push(locomotion('Walk', GAITS.walk, WALK_UPPER));
+  // walking leaps out of the walk cycle (take-off on the right or the left foot)
+  clips.push(walkJumpClip('Walk_Jump', 0.0, WALK_UPPER));
+  clips.push(walkJumpClip('Walk_Jump_Left', 0.5, WALK_UPPER));
 
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
   const RUN_ST = derive(LR, {

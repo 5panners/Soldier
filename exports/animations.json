@@ -27,6 +27,30 @@
     "shots": [],
     "events": {}
   },
+  "Walk_Jump": {
+    "duration": 1.6616,
+    "loop": false,
+    "inPlaceSpeed": 1.15,
+    "shots": [],
+    "events": {
+      "takeoff": 0.732,
+      "land": 1.072
+    },
+    "runPhaseStart": 0,
+    "runPhaseEnd": 0
+  },
+  "Walk_Jump_Left": {
+    "duration": 1.6616,
+    "loop": false,
+    "inPlaceSpeed": 1.15,
+    "shots": [],
+    "events": {
+      "takeoff": 0.732,
+      "land": 1.072
+    },
+    "runPhaseStart": 0.5,
+    "runPhaseEnd": 0.5
+  },
   "Run": {
     "duration": 0.7,
     "loop": true,
@@ -35,25 +59,25 @@
     "events": {}
   },
   "Run_Jump": {
-    "duration": 0.986,
+    "duration": 1.126,
     "loop": false,
     "inPlaceSpeed": 4.3,
     "shots": [],
     "events": {
       "takeoff": 0.196,
-      "land": 0.636
+      "land": 0.776
     },
     "runPhaseStart": 0,
     "runPhaseEnd": 0
   },
   "Run_Jump_Left": {
-    "duration": 0.986,
+    "duration": 1.126,
     "loop": false,
     "inPlaceSpeed": 4.3,
     "shots": [],
     "events": {
       "takeoff": 0.196,
-      "land": 0.636
+      "land": 0.776
     },
     "runPhaseStart": 0.5,
     "runPhaseEnd": 0.5
