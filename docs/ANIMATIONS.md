@@ -7,6 +7,7 @@ Vertical motion (gait bob, jump arc) is baked into `Hips.position`.
 ![walk](images/walk.png)
 ![run](images/run.png)
 ![jump](images/jump.png)
+![running jump](images/run_jump.png)
 ![ads walk](images/ads_walk.png)
 ![crouch walk](images/crouch_walk.png)
 ![crawl](images/crawl.png)
@@ -67,6 +68,7 @@ These start and end exactly on the corresponding stance frames, so they chain wi
 | Clip | Length | Loop | Notes |
 |---|---|---|---|
 | `Jump` | 1.85 s | — | Full standing jump with the rifle at the low ready: anticipation crouch to 0.73 m hip height, extension with heel rise, take-off at 0.62 s (2.45 m/s), ballistic flight to about 0.31 m, knee tuck, toe-first landing at 1.12 s, absorb and recover. The rifle lags on take-off and dips on landing. |
+| `Run_Jump` / `Run_Jump_Left` | 0.99 s | — | Running leap taken out of the run cycle, off the right or the left foot. The take-off and landing stances run at the normal run rate, so planted feet move at exactly 4.3 m/s and don't slide. The flight between them is stretched to 0.44 s of true ballistic flight (about 24 cm rise). The landing absorbs and hands back to `Run` at the same phase it started on. In place, so keep the character moving at 4.3 m/s. |
 | `Jump_Start` | 0.62 s | — | Crouch → take-off. Ends with the pelvis at take-off height. |
 | `Jump_Air` | 0.80 s | ✓ | Airborne loop with legs tucked and the pelvis held at take-off height. Let your physics drive the real arc. |
 | `Jump_Land` | 0.73 s | — | Touchdown → absorb → idle. Starts with the pelvis at take-off height. |

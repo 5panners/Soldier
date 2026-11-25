@@ -34,6 +34,30 @@
     "shots": [],
     "events": {}
   },
+  "Run_Jump": {
+    "duration": 0.986,
+    "loop": false,
+    "inPlaceSpeed": 4.3,
+    "shots": [],
+    "events": {
+      "takeoff": 0.196,
+      "land": 0.636
+    },
+    "runPhaseStart": 0,
+    "runPhaseEnd": 0
+  },
+  "Run_Jump_Left": {
+    "duration": 0.986,
+    "loop": false,
+    "inPlaceSpeed": 4.3,
+    "shots": [],
+    "events": {
+      "takeoff": 0.196,
+      "land": 0.636
+    },
+    "runPhaseStart": 0.5,
+    "runPhaseEnd": 0.5
+  },
   "ADS_Walk": {
     "duration": 1.2,
     "loop": true,

@@ -448,6 +448,86 @@ function jumpClips() {
   return clips;
 }
 
+// ------------------------------------------------------------------ running jump
+/**
+ * Running jump built from the run cycle itself (in place, ground speed = run speed): the
+ * take-off foot's stance and the landing foot's stance run at the normal rate, so planted
+ * feet move backward at exactly the run speed and never slide; only the flight phase in
+ * between is stretched to F seconds of true ballistic flight (g = 9.81). It starts at a
+ * heel strike of the take-off foot and ends one full stride later, so it hands straight
+ * back to Run at the same phase.
+ */
+function runJumpClip(name, startPhase, upper, F = 0.44) {
+  const g = GAITS.run, T = g.T, sf = g.stance;
+  const flightFrac = 0.5 - sf;               // fraction of the cycle in each normal flight
+  const tTO = sf * T, tLand = tTO + F, tEnd = tLand + (0.5 - flightFrac + 0.5 - sf) * T + flightFrac * T;
+  const duration = tTO + F + (0.5) * T;      // take-off stance + flight + rest of the stride
+  const phaseAt = (t) => {
+    if (t <= tTO) return t / T;
+    if (t <= tLand) return sf + flightFrac * (t - tTO) / F;
+    return 0.5 + (t - tLand) / T;
+  };
+  void tEnd;
+  // pelvis height of the normal run (with the same reach limit the Run clip uses)
+  const yRun = (ph) => {
+    const h = g.hips(ph), q = qEuler(h.pitch, h.yaw, h.roll);
+    const feet = { Left: gaitFoot(ph + 0.5, g, 1), Right: gaitFoot(ph, g, -1) };
+    return Math.min(h.pos.y, hipsReachBound(h.pos, q, feet));
+  };
+  const dy = (ph) => (yRun(ph + 0.002) - yRun(ph - 0.002)) / (0.004 * T);
+  const s0 = startPhase;
+  const v0 = (G * F) / 2, yTO = yRun(s0 + sf);
+  const N = Math.round(duration * FPS), rows = [];
+  for (let n = 0; n <= N; n++) {
+    const t = (n / N) * duration, ph = s0 + phaseAt(t);
+    const R = gaitFoot(ph, g, -1), L = gaitFoot(ph + 0.5, g, 1);
+    const h = g.hips(ph), quat = qEuler(h.pitch, h.yaw, h.roll);
+    let y;
+    if (t <= tTO) y = hermite(yRun(s0), dy(s0), yTO, v0, tTO, t / tTO);
+    else if (t <= tLand) { const tau = t - tTO; y = yTO + v0 * tau - 0.5 * G * tau * tau; }
+    else {
+      // landing: the downward speed is absorbed by the leg (a damped dip of ~8 cm) while the
+      // pelvis blends back onto the normal run curve
+      const tau = t - tLand, w = smoother(tau / (sf * T * 1.4));
+      const base = lerp(yTO + (yRun(s0 + 0.5) - yTO) * 0, yRun(ph), w);
+      y = base - v0 * tau * Math.exp(-tau / 0.09);
+    }
+    // planted feet must stay reachable (the take-off push straightens the leg)
+    y = Math.min(y, hipsReachBound(h.pos, quat, { Left: L, Right: R }, 0.997));
+    // airborne legs ride up with the body (they were planned for normal run height) and the
+    // knees tuck a little through the stretched flight; both fade to zero at the contacts
+    const air = t > tTO && t < tLand ? Math.sin(Math.PI * (t - tTO) / F) : 0;
+    const lift = (y - yRun(ph)) * Math.sqrt(air) + 0.08 * air;
+    for (const f of [R, L]) if (!f.planted) f.pos.y += lift;
+    // a foot in the air that ends up beyond the extended leg is eased back within reach
+    const reachMax = (LEG_UPPER + LEG_LOWER) * 0.999, soft = 0.03, hp = V3(h.pos.x, y, h.pos.z);
+    for (const [sd, f] of [['Right', R], ['Left', L]]) {
+      if (f.planted) continue;
+      const j = BIND_LOCAL[`${sd}UpLeg`].clone().applyQuaternion(quat).add(hp);
+      const d = f.pos.distanceTo(j), knee = reachMax - soft;
+      if (d > knee) f.pos = j.clone().add(f.pos.clone().sub(j).multiplyScalar((knee + soft * (1 - Math.exp(-(d - knee) / soft))) / d));
+    }
+    rows.push({ t, ph, h, quat, y, feet: { Left: L, Right: R } });
+  }
+  const acc = secondDerivative(rows.map((r) => r.y), DT, false).map((a, i) => {
+    const t = rows[i].t; return t > tTO && t < tLand ? a + G : a; // rifle and body fall together
+  });
+  const lag = oneShotSpring(acc, DT, 4.5, 0.6).map((x) => Math.max(-0.015, Math.min(0.015, x * 0.3)));
+  const frames = rows.map((r, i) => {
+    const u = upper(r.ph, r.h);
+    const st = derive(u.st, { hipsPos: V3(r.h.pos.x, r.y, r.h.pos.z), hipsQ: r.quat });
+    const kneePole = {
+      Left: V3(0, 0, 1).applyQuaternion(r.feet.Left.quat).add(V3(0.12, 0, 0)).normalize(),
+      Right: V3(0, 0, 1).applyQuaternion(r.feet.Right.quat).add(V3(-0.12, 0, 0)).normalize(),
+    };
+    const spec = specFrom(st, { feet: r.feet, kneePole, lag: lag[i], headWorld: u.headWorld });
+    spec.planted = { Left: r.feet.Left.planted, Right: r.feet.Right.planted };
+    return spec;
+  });
+  return { name, duration, loop: false, speed: g.v, frames, startPhase, endPhase: startPhase,
+    events: { takeoff: +tTO.toFixed(3), land: +tLand.toFixed(3) } };
+}
+
 // ------------------------------------------------------------------ natural upper body
 /**
  * Upper body for carry-mode locomotion. Instead of a rigidly stabilised 'turret' the
@@ -716,9 +796,13 @@ export function buildClipLibrary() {
     clavicle: { Left: clav('Left', 3, 33), Right: clav('Right', 3, 4) },
     elbowPole: { Left: V3(0.25, -1, -0.35), Right: V3(-0.45, -1, -0.6) },
   });
-  clips.push(locomotion('Run', GAITS.run, lively(RUN_ST, {
+  const RUN_UPPER = lively(RUN_ST, {
     pitch: 18, yaw: -13, roll: 1, pelvisYaw0: -5, counter: 0.6, pitchAmp: 1.8, rollAmp: 1.6, clavAmp: 2.5, headPitch: 3, headAmp: 1.8, phase: 0.06,
-  })));
+  });
+  clips.push(locomotion('Run', GAITS.run, RUN_UPPER));
+  // running jumps out of the run cycle (take-off on the right or the left foot)
+  clips.push(runJumpClip('Run_Jump', 0.0, RUN_UPPER));
+  clips.push(runJumpClip('Run_Jump_Left', 0.5, RUN_UPPER));
 
   // Aiming while walking: 'Groucho' heel-to-toe walk, chest world-locked, cheek weld kept
   clips.push(locomotion('ADS_Walk', GAITS.adsWalk, () => ({ st: ADS })));

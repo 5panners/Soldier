@@ -329,7 +329,7 @@ const GROUPS = [
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
   ['Prone', ['Prone_Idle', 'Prone_Fire', 'Prone_Fire_Auto', 'Prone_Crawl', 'Stand_To_Prone', 'Prone_To_Stand']],
-  ['Jump & vault', ['Jump', 'Jump_Start', 'Jump_Air', 'Jump_Land', 'Vault']],
+  ['Jump & vault', ['Jump', 'Run_Jump', 'Run_Jump_Left', 'Jump_Start', 'Jump_Air', 'Jump_Land', 'Vault']],
   ['Poses', ['Idle_Pose', 'ADS_Pose', 'HipFire_Pose', 'Crouch_Pose', 'Crouch_ADS_Pose', 'Prone_Pose']],
 ];
 
@@ -399,7 +399,7 @@ function setMode(m) {
   $('#modeview').classList.toggle('on', m === 'view');
   controls.enabled = m === 'view';
   if (m === 'play') {
-    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
+    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingRunJump = false; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
     sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null;
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
@@ -434,7 +434,9 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'Space' && !sim.jumping && !sim.vault && (sim.posture || 'stand') === 'stand' && !sim.postureClip) {
     const v = vaultableWall();
-    if (v) startVault(v); else startJump();
+    if (v) startVault(v);
+    else if (sim.base === 'Run' && sim.speed > 2) sim.pendingRunJump = true; // leap on the next footfall
+    else startJump();
   }
   if (e.code === 'KeyV') sim.eye = !sim.eye;
   if (e.code === 'KeyL') sim.laser = !sim.laser;
@@ -506,6 +508,16 @@ function startJump() {
 }
 mixer.addEventListener('finished', (e) => {
   if (mode === 'play' && e.action === actions.Jump) { sim.jumping = false; sim.base = 'Jump'; }
+  if (mode === 'play' && (e.action === actions.Run_Jump || e.action === actions.Run_Jump_Left) && sim.jumping === 'run') {
+    // hand straight back to the run cycle at the phase the leap ended on
+    const end = DEFS[e.action.getClip().name].endPhase;
+    sim.jumping = false;
+    const run = actions.Run;
+    run.reset(); run.setEffectiveWeight(1); run.setEffectiveTimeScale(1); run.play();
+    run.time = end * run.getClip().duration;
+    e.action.crossFadeTo(run, 0.06, false);
+    sim.base = 'Run'; current = run;
+  }
   if (mode === 'play' && e.action === actions.Vault && sim.vault) {
     // the clip carries the body 2.5 m forward (root motion in Hips): move the character there
     const adv = DEFS.Vault.rootMotion.z;
@@ -525,6 +537,23 @@ const POSTURE_T = {
 };
 function updatePlay(dt) {
   if (sim.vault) { updateVault(dt); return; }
+  // queued running leap: start it exactly at the next heel strike so the stride lines up
+  if (sim.pendingRunJump) {
+    const run = actions.Run, f = run.time / run.getClip().duration, prev = sim.lastRunPhase ?? f;
+    const crossed = (a, b, x) => (a <= b ? a < x && b >= x : a < x || b >= x);
+    if (sim.base !== 'Run') sim.pendingRunJump = false;
+    else if (crossed(prev, f, 0.5) || crossed(prev, f, 0.999999)) {
+      const name = crossed(prev, f, 0.5) ? 'Run_Jump_Left' : 'Run_Jump';
+      const startPhase = DEFS[name].startPhase;
+      const a = actions[name];
+      a.reset(); a.setEffectiveWeight(1); a.setEffectiveTimeScale(1); a.play();
+      // begin the leap as far in as the run has already gone past the heel strike
+      a.time = Math.max(0, ((f - startPhase + 1) % 1) * run.getClip().duration);
+      run.crossFadeTo(a, 0.05, false);
+      sim.base = name; current = a; sim.jumping = 'run'; sim.pendingRunJump = false;
+    }
+    sim.lastRunPhase = f;
+  } else sim.lastRunPhase = undefined;
   // arrow keys orbit the camera (same as moving the mouse): left/right turn, up/down tilt
   const orbitX = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
   const orbitY = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
@@ -595,7 +624,9 @@ function updatePlay(dt) {
     const inTransition = sim.base && sim.base.includes('_To_') && actions[sim.base].isRunning() && !moving;
     if (!inTransition) setBase(clip, 0.22, timeScale);
   } else {
-    speed = moving ? (sim.speed > 2 ? 4.0 : 1.2) : 0;
+    // running leap keeps the run speed (its planted feet move at exactly that speed);
+    // the standing jump is done on the spot, so the feet never slide
+    speed = sim.jumping === 'run' ? DEFS.Run.speed : 0;
   }
   sim.lowerYaw += (lowerYaw - sim.lowerYaw) * Math.min(1, dt * 10);
   sim.speed += (speed - sim.speed) * Math.min(1, dt * 6);
