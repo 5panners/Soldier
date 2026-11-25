@@ -45,7 +45,7 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 
 * **Viewer** lets you pick any clip, cross-fade between clips, scrub, step frames and change playback speed. You can also show the skeleton or wireframe and switch between camera presets. In-place clips scroll the ground at the clip's speed, so you can check that planted feet stay locked.
 * **Play (WASD)** is a third-person sandbox with a firing range:
-  * `W` / `S`: walk forward / back along the soldier's own facing. `A` / `D`: turn him. The camera never steers him. `Shift`: run. `Space`: from a walk or run, leap off the next footfall; standing still, a two-footed jump; facing a low wall, vault it.
+  * `W` / `S`: walk forward / back along the soldier's own facing. `A` / `D`: turn him. The camera never steers him (mouse or arrow keys orbit it, the mouse wheel zooms in and out). `Shift`: run. `Space`: from a walk or run, leap off the next footfall; standing still, a two-footed jump; facing a low wall, vault it.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
   * `RMB`: aim down sights. `LMB`: fire. `H`: toggle the hip-fire stance.
   * `V`: first-person eye view. It looks through the optic while aiming down sights, and straight ahead from the eyes otherwise. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.

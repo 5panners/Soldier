@@ -458,6 +458,12 @@ window.addEventListener('mouseup', (e) => {
   if (e.button === 2 && sim.aim === 'ads') sim.aim = 'none';
 });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+// mouse wheel: orbit radius in play mode (0.5x .. 4x of the default distance)
+renderer.domElement.addEventListener('wheel', (e) => {
+  if (mode !== 'play') return;
+  e.preventDefault();
+  sim.zoom = THREE.MathUtils.clamp((sim.zoom || 1) * Math.exp(e.deltaY * 0.0012), 0.5, 4);
+}, { passive: false });
 window.addEventListener('mousemove', (e) => {
   if (mode !== 'play') return;
   const locked = document.pointerLockElement === renderer.domElement;
@@ -737,7 +743,7 @@ function updatePlayCamera(dt) {
     return;
   }
   camera.fov = sim.aim === 'ads' ? 30 : 42; camera.near = 0.02; camera.updateProjectionMatrix();
-  const dist = sim.aim === 'ads' ? 2.1 : 2.6;
+  const dist = (sim.aim === 'ads' ? 2.1 : 2.6) * (sim.zoom || 1); // mouse wheel scales the orbit radius
   const side = sim.aim === 'ads' ? -0.75 : -0.55;
   const ph = { stand: sim.aim === 'ads' ? 1.6 : 1.55, crouch: 1.15, prone: 0.75 }[sim.posture || 'stand'];
   const pivot = S.group.position.clone().add(new THREE.Vector3(0, ph, 0));
