@@ -440,12 +440,19 @@ function footIK(dt) {
     const root = toChar(B[`${sd}UpLeg`].getWorldPosition(new THREE.Vector3()));
     const knee = toChar(B[`${sd}Leg`].getWorldPosition(new THREE.Vector3()));
     const target = toChar(I.A.clone().add(new THREE.Vector3(0, I.off, 0)));
-    // knee aims where the foot points (slightly outward), as in the authored clips - not along
-    // the leg's current bend, which flips sideways when the foot is raised onto a step
+    // knee direction: the clip's own bend (correct in the sagittal plane, e.g. pointing down when the
+    // heel is kicked up behind) with any sideways part removed, plus straight ahead so a nearly
+    // straight leg has a stable pole. A pure "forward" pole fails when the hip-ankle line itself
+    // runs forward/back (heel kick going downhill) and the knee splays out.
     const side = sd === 'Left' ? 1 : -1;
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(charQ(B.Hips)).setY(0).normalize();
-    const pole = fwd.add(new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(0.04 * side)).normalize();
-    void knee;
+    const lat = new THREE.Vector3(fwd.z, 0, -fwd.x);
+    const ankC = toChar(B[`${sd}Foot`].getWorldPosition(new THREE.Vector3()));
+    const axis = ankC.clone().sub(root).normalize();
+    const bend = knee.clone().sub(root);
+    bend.addScaledVector(axis, -bend.dot(axis));
+    bend.addScaledVector(lat, -bend.dot(lat));
+    const pole = bend.multiplyScalar(8).add(fwd).addScaledVector(lat, 0.04 * side).normalize();
     const ik = twoBoneIK(root, target, l1, l2, pole);
     const bindPole = new THREE.Vector3(0, 0, 1);
     const upQ = frameRotation(BIND_LOCAL[`${sd}Leg`].clone().normalize(), bindPole, ik.mid.clone().sub(root), ik.pp);
