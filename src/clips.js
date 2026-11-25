@@ -129,8 +129,8 @@ export const GAITS = {
     lagX: { freq: 2.3, zeta: 0.45, gain: 0.6 },
   },
   run: {
-    // ~4.3 m/s combat run: 1.5 m steps at ~171 steps/min, ~0.2 s ground contact
-    T: 0.70, v: 4.3, stance: 0.28, heelRock: 0.045, heelOff: 0.12, zHS: 0.22, footX: 0.075, toeOut: deg(5),
+    // ~5.2 m/s fast combat run: 1.7 m steps at ~182 steps/min, ~0.165 s ground contact
+    T: 0.66, v: 5.2, stance: 0.25, heelRock: 0.04, heelOff: 0.11, zHS: 0.22, footX: 0.075, toeOut: deg(5),
     hsPitch: deg(10), toePitch: deg(42), heelRisePow: 1.3, lift: 0.34, liftSkew: 0.55, kickBack: -0.26,
     swingInset: 0.008, landVy: 0.7, pitchEase: 2.0, swingPitchBias: deg(-8), swingToe: deg(4),
     hips: (p) => ({
@@ -347,10 +347,10 @@ function transition(name, a, b, duration, arc = null, meta = {}) {
  */
 function jumpTimeline() {
   const st = STANCES.lowReady;
-  const T = { crouch0: 0.10, crouch1: 0.40, take: 0.62, land: 1.12, low: 1.32, end: 1.85 };
+  const T = { crouch0: 0.10, crouch1: 0.42, take: 0.64, land: 1.30, low: 1.50, end: 2.05 }; // 0.66 s flight
   const flight = T.land - T.take;
   const v0 = (G * flight) / 2;           // take-off velocity for symmetric flight
-  const yTake = 1.00, yLow = 0.73, yLand = 0.74, yStand = st.hipsPos.y;
+  const yTake = 1.00, yLow = 0.69, yLand = 0.71, yStand = st.hipsPos.y;
   const hipsY = (t) => {
     if (t < T.crouch0) return yStand;
     if (t < T.crouch1) return hermite(yStand, 0, yLow, 0, T.crouch1 - T.crouch0, (t - T.crouch0) / (T.crouch1 - T.crouch0));
@@ -457,7 +457,7 @@ function jumpClips() {
  * heel strike of the take-off foot and ends one full stride later, so it hands straight
  * back to Run at the same phase.
  */
-function runJumpClip(name, startPhase, upper, F = 0.58) {
+function runJumpClip(name, startPhase, upper, F = 0.70) {
   const g = GAITS.run, T = g.T, sf = g.stance;
   const flightFrac = 0.5 - sf;               // fraction of the cycle in each normal flight
   const tTO = sf * T, tLand = tTO + F, tEnd = tLand + (0.5 - flightFrac + 0.5 - sf) * T + flightFrac * T;
@@ -535,7 +535,7 @@ function runJumpClip(name, startPhase, upper, F = 0.58) {
  * trailing leg swings through and the clip ends at the same walk phase it started on.
  * Each foot runs on its own time->phase map, so no planted foot ever slides.
  */
-function walkJumpClip(name, startPhase, upper, F = 0.34) {
+function walkJumpClip(name, startPhase, upper, F = 0.46) {
   const g = GAITS.walk, T = g.T, sf = g.stance; // sf: stance fraction (0.62)
   const tTO = sf * T;                       // take-off foot leaves the ground
   const tOtherOff = (sf - 0.5) * T;         // the other foot's toe-off (start of its swing)

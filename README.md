@@ -20,13 +20,13 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 
 | Group | Clips |
 |---|---|
-| Locomotion (in place) | `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.15 m/s, `Run` 4.3 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 0.9 m/s |
+| Locomotion (in place) | `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.15 m/s, `Run` 5.2 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 0.9 m/s |
 | Weapon stances | `ADS_Idle`, `HipFire_Idle` |
 | Firing | `ADS_Fire`, `ADS_Fire_Auto` (700 RPM loop), `HipFire_Fire`, `HipFire_Fire_Auto` |
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
 | Crouch | `Crouch_Idle`, `Crouch_Walk` 0.85 m/s, `Crouch_ADS_Idle`, `Crouch_ADS_Walk`, `Crouch_ADS_Fire`, `Crouch_ADS_Fire_Auto`, `Stand_To_Crouch`, `Crouch_To_Stand`, `Crouch_To_Crouch_ADS`, `Crouch_ADS_To_Crouch` |
 | Prone | `Prone_Idle` (aiming), `Prone_Fire`, `Prone_Fire_Auto`, `Prone_Crawl` 0.20 m/s (belly crawl), `Stand_To_Prone`, `Prone_To_Stand` |
-| Jump & vault | `Walk_Jump` / `Walk_Jump_Left` (walking leap off the right / left foot), `Run_Jump` / `Run_Jump_Left` (powerful running leap at 4.3 m/s), `Jump` (standing two-footed jump, full), `Jump_Start`, `Jump_Air` (loop), `Jump_Land`, `Vault` (one-handed vault over a 1 m wall, 2.5 m root motion) |
+| Jump & vault | `Walk_Jump` / `Walk_Jump_Left` (walking leap off the right / left foot), `Run_Jump` / `Run_Jump_Left` (powerful running leap at 5.2 m/s), `Jump` (standing two-footed jump, full), `Jump_Start`, `Jump_Air` (loop), `Jump_Land`, `Vault` (one-handed vault over a 1 m wall, 2.5 m root motion) |
 | Static poses | `Idle_Pose`, `ADS_Pose`, `HipFire_Pose`, `Crouch_Pose`, `Crouch_ADS_Pose`, `Prone_Pose` (aim-offset / additive references) |
 
 Per-clip metadata is in [`exports/animations.json`](exports/animations.json) and in the glTF `extras` of the `Soldier` node: duration, loop flag, in-place speed, shot times and jump take-off/landing times. Details are in [docs/ANIMATIONS.md](docs/ANIMATIONS.md).
@@ -74,7 +74,7 @@ The clips are not hand-keyed curves. Each frame is a high-level pose (pelvis, ch
    * Knees stay soft through stance, and the left and right steps aren't mirror-perfect.
    * Hip sway and tilt are kept small for a squared-off, loaded-soldier gait.
 8. **Crawl and prone.** The crawl keeps the belly on the ground. Each forearm plants as a ground contact that moves backward at the crawl speed, and the opposite knee is drawn up sideways along the ground, then straightens as the body slides over it. Chest pitch is solved each frame so the forearms reach the ground, and the rifle stays cradled across both forearms. Getting down to prone and back up is a multi-key motion: crouch → both knees → onto the forearms → legs back → aim. It interpolates smoothly through every key.
-9. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.5 s airtime, about 0.3 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
+9. **Jump.** The jump has an anticipation crouch, an explosive extension with heel rise, and true ballistic flight (g = 9.81 m/s², 0.66 s airtime, about 0.53 m rise). The knees tuck in the air, and the landing is toes first with a deep absorb.
 
 The biomechanics and marksmanship references behind the numbers are listed in [docs/REFERENCES.md](docs/REFERENCES.md).
 
@@ -105,10 +105,10 @@ This re-bakes headlessly, writes `exports/soldier.glb` and `exports/animations.j
 | **Blender** | File → Import → glTF 2.0. The clips appear as Actions. |
 
 Tips:
-* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.15, `Run` 4.3, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.20 m/s) so the feet stay locked to the ground.
+* **In-place clips.** Move your character controller at `inPlaceSpeed` (`Walk` 1.15, `Run` 5.2, `ADS_Walk` 0.9, `Crouch_Walk` 0.85, `Prone_Crawl` 0.20 m/s) so the feet stay locked to the ground.
 * **Weapon socket.** The rifle hangs off `Weapon_R`. To swap guns, attach your own weapon to that bone. The grip origin is the weapon origin, +Z is the muzzle and +Y is up.
 * **Support hand.** Use the `LeftHand_IK` node with your engine's two-bone IK to keep the left hand on the handguard when blending or layering.
-* **Walking / running jumps.** `Walk_Jump` and `Run_Jump` start at the right-foot heel strike of `Walk` / `Run`, and the `_Left` versions at the left. `Run_Jump` starts at the right-foot heel strike of `Run` (run phase 0) and `Run_Jump_Left` at the left (phase 0.5). Each ends one stride later at the same phase, so you can cut into it from `Run` and straight back out with matching feet. Keep moving at the run speed (4.3 m/s) through it. The phases are in `animations.json` (`runPhaseStart` / `runPhaseEnd`).
+* **Walking / running jumps.** `Walk_Jump` and `Run_Jump` start at the right-foot heel strike of `Walk` / `Run`, and the `_Left` versions at the left. `Run_Jump` starts at the right-foot heel strike of `Run` (run phase 0) and `Run_Jump_Left` at the left (phase 0.5). Each ends one stride later at the same phase, so you can cut into it from `Run` and straight back out with matching feet. Keep moving at the run speed (5.2 m/s) through it. The phases are in `animations.json` (`runPhaseStart` / `runPhaseEnd`).
 * **Vault.** The clip is authored against a wall 1.0 m high and 25 cm thick, with its near face 1.2 m in front of the start position. It moves the body 2.5 m forward in the Hips track (root motion). Either extract root motion, or play it from that spot and move the character 2.5 m forward when it ends, as the simulator does. The numbers are in `animations.json` under `Vault.obstacle` and `Vault.rootMotion`.
 * **Recoil layering.** Use `ADS_Pose` / `HipFire_Pose` as the reference pose when you make the fire clips additive, then layer them over walking. The simulator does exactly this.
 
