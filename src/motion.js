@@ -399,7 +399,8 @@ export function calibrateAim(st, cfg) {
       neckLocal: qEuler(np, ny, nr),
       headLocal: qEuler(hp, hy, hr),
       clavicle: { Left: st.clavicle.Left, Right: clav('Right', elev, prot) },
-      mode: { anchor: 'pocket', contact: WEAPON.BUTT.clone().add(V3(0, -buttUp, 0.004)), rel: relAim.clone() },
+      mode: { anchor: 'pocket', contact: WEAPON.BUTT.clone().add(V3(0, -buttUp, 0.004)), rel: relAim.clone(),
+        ...(cfg.shift ? { offset: cfg.shift.clone() } : {}) },
     };
   };
   const evalAim = (x) => {
@@ -447,7 +448,7 @@ export const CALIB_RESULTS = {};
 function cacheKey(st, cfg) {
   const r = (v) => (typeof v === 'number' ? Math.round(v * 1e5) / 1e5 : v);
   const flat = JSON.stringify({ st: [st.hipsPos, st.hipsQ, st.chestQ, st.clavicle.Left, st.aim, st.leftGrip, st.elbowPole, st.feet, st.kneePole],
-    cfg: [cfg.bounds, cfg.starts, cfg.centre], skel: BIND_WORLD, w: [WEAPON.BUTT, WEAPON.SIGHT_Y], pocket: SHOULDER_POCKET_LOCAL, eye: RIGHT_EYE_LOCAL }, (k, v) => r(v));
+    cfg: [cfg.bounds, cfg.starts, cfg.centre, cfg.shift], skel: BIND_WORLD, w: [WEAPON.BUTT, WEAPON.SIGHT_Y], pocket: SHOULDER_POCKET_LOCAL, eye: RIGHT_EYE_LOCAL }, (k, v) => r(v));
   let h = 5381;
   for (let i = 0; i < flat.length; i++) h = ((h * 33) ^ flat.charCodeAt(i)) >>> 0;
   return h.toString(16);
@@ -493,17 +494,21 @@ function buildProne() {
 export function calibrate() {
   if (calibrated) return STANCES;
   const standing = {
-    np: [0, 38], nr: [-4, 14], ny: [-10, 25], hp: [-22, 16], hy: [-10, 25], hr: [-4, 14], elev: [0, 26], prot: [-6, 16],
+    np: [0, 38], nr: [-4, 6], ny: [-10, 25], hp: [-22, 16], hy: [-10, 25], hr: [-4, 6], elev: [0, 26], prot: [-6, 16],
   };
   const starts = [[24, 6, 8, -8, 8, 6, 16, 4, 0.025], [30, 8, 12, -14, 4, 4, 20, 0, 0.03], [18, 4, 4, 0, 10, 8, 12, 8, 0.02]];
-  calibrateAim(STANCES.ads, { name: 'ads', bounds: standing, starts });
-  calibrateAim(STANCES.crouchAds, { name: 'crouchAds', bounds: standing, starts });
+  // The stock seats a little inboard of the pocket (toward the collarbone) so the rifle sits more
+  // under the face and the head needs less tilt and turn to reach the cheek weld.
+  const ADS_SHIFT = V3(0.045, 0, 0);
+  calibrateAim(STANCES.ads, { name: 'ads', bounds: standing, starts, shift: ADS_SHIFT });
+  calibrateAim(STANCES.crouchAds, { name: 'crouchAds', bounds: standing, starts, shift: ADS_SHIFT });
   STANCES.prone = buildProne();
   calibrateAim(STANCES.prone, {
     name: 'prone',
     bounds: { np: [-60, 30], nr: [-8, 14], ny: [-20, 25], hp: [-45, 15], hy: [-15, 25], hr: [-6, 14], elev: [0, 30], prot: [-10, 20] },
     starts: [[-40, 4, 8, -20, 6, 6, 16, 4, 0.02], [-55, 8, 4, -10, 10, 4, 20, 0, 0.03], [-30, 0, 12, -30, 0, 8, 10, 8, 0.01]],
     centre: { np: deg(-45) },
+    shift: V3(0.02, 0, 0),
   });
 
   const hip = STANCES.hip;

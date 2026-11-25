@@ -81,6 +81,8 @@ These start and end exactly on the corresponding stance frames, so they chain wi
 
 ## Cheek-weld solutions
 
-The aiming head, neck and shoulder postures aren't hand-posed. They are solved so that the **right eye lies on the optic's axis** with the butt seated in the shoulder pocket, within comfortable joint limits. This is done separately for the standing, crouched and prone aim. The cheek weld is about 6–8 cm forward of the butt pad, over the stock comb. The neck pivots low, inside the collar, so a short neck can still bring the head forward onto the stock.
+The aiming head, neck and shoulder postures aren't hand-posed. They are solved so that the **right eye lies on the optic's axis** with the butt seated in the shoulder pocket, within comfortable joint limits. This is done separately for the standing, crouched and prone aim. The cheek weld is about 6–8 cm forward of the butt pad, over the stock comb. The neck pivots low, inside the collar, so a short neck can still bring the head forward onto the stock. The stock seats 4.5 cm inboard of the shoulder pocket (2 cm when prone), toward the collarbone, so the rifle sits more under the face and the head tilts only about 6° at the neck and 6° at the head (previously 14° + 14°).
+
+![ADS head posture before (left) and after (right)](images/ads_neck.png)
 
 Run `npm run validate` to see the current numbers and `npm run calibrate` to re-solve them after changing a stance or the skeleton.
