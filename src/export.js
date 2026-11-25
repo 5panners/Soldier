@@ -12,6 +12,7 @@ export function clipMetadata(baked) {
     events: b.def.events || {},
     ...(b.def.rootMotion ? { rootMotion: b.def.rootMotion } : {}),
     ...(b.def.obstacle ? { obstacle: b.def.obstacle } : {}),
+    ...(b.def.strafe ? { inPlaceDirection: b.def.strafe === 'left' ? '+X (left)' : '-X (right)' } : {}),
     ...(b.def.startPhase !== undefined ? { runPhaseStart: b.def.startPhase, runPhaseEnd: b.def.endPhase } : {}),
   }]));
 }

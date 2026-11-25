@@ -51,6 +51,38 @@
     "runPhaseStart": 0.5,
     "runPhaseEnd": 0.5
   },
+  "Strafe_Left": {
+    "duration": 0.86,
+    "loop": true,
+    "inPlaceSpeed": 0.698,
+    "shots": [],
+    "events": {},
+    "inPlaceDirection": "+X (left)"
+  },
+  "Strafe_Right": {
+    "duration": 0.86,
+    "loop": true,
+    "inPlaceSpeed": 0.698,
+    "shots": [],
+    "events": {},
+    "inPlaceDirection": "-X (right)"
+  },
+  "ADS_Strafe_Left": {
+    "duration": 0.95,
+    "loop": true,
+    "inPlaceSpeed": 0.526,
+    "shots": [],
+    "events": {},
+    "inPlaceDirection": "+X (left)"
+  },
+  "ADS_Strafe_Right": {
+    "duration": 0.95,
+    "loop": true,
+    "inPlaceSpeed": 0.526,
+    "shots": [],
+    "events": {},
+    "inPlaceDirection": "-X (right)"
+  },
   "Run": {
     "duration": 0.66,
     "loop": true,

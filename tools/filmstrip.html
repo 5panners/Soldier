@@ -41,7 +41,8 @@ const span = Number(P.get('span') || 1);
 for (let i = 0; i < n; i++) {
   const t = (i / (def.loop ? n : Math.max(1, n - 1))) * def.duration * span;
   act.time = Math.min(t, def.duration); mixer.update(0);
-  grid.position.z = -(speed * t) % 0.25; // ground motion for in-place clips
+  grid.position.z = def.strafe ? 0 : -(speed * t) % 0.25; // ground motion for in-place clips
+  grid.position.x = def.strafe ? -(def.strafe === 'left' ? 1 : -1) * (speed * t) % 0.25 : 0;
   const x = (i % cols) * cw, y = (rows - 1 - Math.floor(i / cols)) * ch;
   renderer.setViewport(x, y, cw, ch); renderer.setScissor(x, y, cw, ch);
   renderer.render(scene, camera);

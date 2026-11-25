@@ -615,6 +615,60 @@ function walkJumpClip(name, startPhase, upper, F = 0.58, tPush = 0.30) {
     events: { takeoff: +tTO.toFixed(3), land: +tL.toFixed(3) } };
 }
 
+// ------------------------------------------------------------------ strafe
+/**
+ * Side-step strafe (in place, ground moves sideways under the feet). The lead foot steps
+ * out, the trailing foot closes up without crossing, both feet keep pointing forward and
+ * stay flat on the ground; each planted foot moves at exactly the strafe speed. dir = +1
+ * strafes to the soldier's left (+X), -1 to his right.
+ */
+function strafeClip(name, dir, upper, o = {}) {
+  const T = o.T ?? 0.86, L = o.L ?? 0.60, s = 0.60, v = L / T;
+  // planted x ranges (for dir = +1): lead foot from a down to a - s*L, trail foot from b down;
+  // spacing keeps a ~0.18 m gap in double support, mean foot position under the pelvis
+  const a = 0.55 * L + 0.09, b = 0.05 * L - 0.09;
+  const lift = o.lift ?? 0.06, hipsY = o.hipsY ?? 0.90, bob = o.bob ?? 0.012;
+  const foot = (ph, x0, zOff, sideSign) => {
+    ph = ((ph % 1) + 1) % 1;
+    const yaw = sideSign * deg(6);
+    if (ph < s) return { pos: V3(dir * (x0 - L * ph), ANKLE_HEIGHT_C, zOff), quat: footQuat(0, yaw), toe: 0, planted: true };
+    const u = (ph - s) / (1 - s), e = smoother(u);
+    const x = lerp(x0 - L * s, x0, e);
+    return { pos: V3(dir * x, ANKLE_HEIGHT_C + lift * Math.pow(Math.sin(Math.PI * u), 1.2), zOff + 0.02 * Math.sin(Math.PI * u)),
+      quat: footQuat(-deg(8) * Math.sin(Math.PI * u), yaw), toe: deg(4) * Math.sin(Math.PI * u), planted: false };
+  };
+  const N = Math.round(T * FPS), rows = [];
+  const lead = dir > 0 ? 'Left' : 'Right', trail = dir > 0 ? 'Right' : 'Left';
+  for (let n = 0; n < N; n++) {
+    const p = n / N;
+    const feet = {};
+    feet[lead] = foot(p, a, dir > 0 ? 0.03 : -0.03, dir > 0 ? 1 : -1);
+    feet[trail] = foot(p + 0.5, b, dir > 0 ? -0.03 : 0.03, dir > 0 ? -1 : 1);
+    // pelvis rides between the feet: lowest in double support, shifts over the stance foot
+    const hx = dir * 0.035 * Math.cos(TAU * (p - 0.25));
+    const hy = hipsY + bob * Math.cos(2 * TAU * (p - 0.30));
+    const quat = qEuler(deg(o.pitch ?? 5), deg(o.yaw ?? -6), dir * deg(1.5) * Math.cos(TAU * (p - 0.25)));
+    rows.push({ p, feet, h: { pos: V3(hx, hy, 0), yaw: deg(o.yaw ?? -6), roll: 0, pitch: deg(o.pitch ?? 5) }, quat, y: hy });
+  }
+  let ys = rows.map((r) => Math.min(r.y, hipsReachBound(r.h.pos, r.quat, r.feet)));
+  ys = periodicSmooth(ys, 1.5);
+  ys = ys.map((y, i) => Math.min(y, hipsReachBound(rows[i].h.pos, rows[i].quat, rows[i].feet) + 0.002));
+  const acc = secondDerivative(ys, DT, true);
+  const lag = periodicSpring(acc, DT, 3.6, 0.45).map((x) => x * (o.lagGain ?? 0.5));
+  const ax = secondDerivative(rows.map((r) => r.h.pos.x), DT, true);
+  const lagX = periodicSpring(ax, DT, 2.4, 0.5).map((x) => x * (o.lagGain ?? 0.5));
+  const frames = rows.map((r, i) => {
+    const u = upper(r.p, r.h);
+    const st = derive(u.st, { hipsPos: V3(r.h.pos.x, ys[i], 0), hipsQ: r.quat });
+    const spec = specFrom(st, { feet: r.feet, kneePole: { Left: V3(0.15, 0, 1).normalize(), Right: V3(-0.15, 0, 1).normalize() },
+      lag: lag[i], lagX: lagX[i], headWorld: u.headWorld });
+    spec.planted = { Left: r.feet.Left.planted, Right: r.feet.Right.planted };
+    return spec;
+  });
+  frames.push(frames[0]);
+  return { name, duration: T, loop: true, speed: v, strafe: dir > 0 ? 'left' : 'right', frames };
+}
+
 // ------------------------------------------------------------------ natural upper body
 /**
  * Upper body for carry-mode locomotion. Instead of a rigidly stabilised 'turret' the
@@ -880,6 +934,12 @@ export function buildClipLibrary() {
   // walking leaps out of the walk cycle (take-off on the right or the left foot)
   clips.push(walkJumpClip('Walk_Jump', 0.0, WALK_UPPER));
   clips.push(walkJumpClip('Walk_Jump_Left', 0.5, WALK_UPPER));
+  // strafing at the low ready and while aiming
+  const strafeUpper = () => ({ st: WALK_ST, headWorld: qEuler(deg(3), deg(-1), 0) });
+  clips.push(strafeClip('Strafe_Left', 1, strafeUpper));
+  clips.push(strafeClip('Strafe_Right', -1, strafeUpper));
+  clips.push(strafeClip('ADS_Strafe_Left', 1, () => ({ st: ADS }), { T: 0.95, L: 0.50, hipsY: 0.875, bob: 0.006, pitch: 9, yaw: -28, lift: 0.05, lagGain: 0.12 }));
+  clips.push(strafeClip('ADS_Strafe_Right', -1, () => ({ st: ADS }), { T: 0.95, L: 0.50, hipsY: 0.875, bob: 0.006, pitch: 9, yaw: -28, lift: 0.05, lagGain: 0.12 }));
 
   // Running: compact carry, muzzle down-left, strong forward lean, thorax counter-rotation
   const RUN_ST = derive(LR, {

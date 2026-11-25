@@ -5,6 +5,7 @@ Locomotion is **in place**: the character stays at the origin and the clip's `in
 Vertical motion (gait bob, jump arc) is baked into `Hips.position`.
 
 ![walk](images/walk.png)
+![strafe](images/strafe.png)
 ![run](images/run.png)
 ![jump](images/jump.png)
 ![running jump](images/run_jump.png)
@@ -24,6 +25,8 @@ Vertical motion (gait bob, jump arc) is baked into `Hips.position`.
 | `Run` | 0.66 s | ✓ | 5.2 m/s | Fast combat run: 1.7 m steps at 182 steps/min, stance 25 % (about 0.165 s ground contact) with two flight phases. Midfoot contact, high heel recovery, a single clean rise and fall per step, 18° trunk lean and thorax counter-rotation. The rifle is carried compact across the chest, muzzle down-left. |
 | `ADS_Walk` | 1.20 s | ✓ | 0.9 m/s | Aiming "Groucho" walk: knees bent, smooth rolling heel-to-toe, chest world-locked. Cheek weld kept: the eye stays within 1 mm of the sight line. |
 | `HipFire_Walk` | 1.20 s | ✓ | 0.9 m/s | The same rolling gait with the stock clamped under the right arm. |
+| `Strafe_Left` / `Strafe_Right` | 0.86 s | ✓ | 0.70 m/s sideways | Side-step at the low ready. The lead foot steps out about 0.36 m and the trailing foot closes up without crossing. Feet stay flat and pointing forward, the pelvis shifts over each stance foot and dips slightly in double support, and the rifle sways a little sideways. Planted feet move at exactly the strafe speed. In place, travelling sideways (+X left, −X right). |
+| `ADS_Strafe_Left` / `ADS_Strafe_Right` | 0.95 s | ✓ | 0.53 m/s sideways | Aimed side-step: lower, smoother, bladed stance with the chest locked and the cheek weld kept (eye within 1 mm of the sight line). |
 
 | `Crouch_Walk` | 1.24 s | ✓ | 0.85 m/s | Low crouched advance: pelvis at about 0.64 m, 24° trunk lean, wide base, rolling heel-to-toe, rifle at the low ready. |
 | `Crouch_ADS_Walk` | 1.24 s | ✓ | 0.85 m/s | The same crouched gait while aiming. The chest is world-locked and the cheek weld kept (eye within 2 mm). |

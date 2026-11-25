@@ -321,10 +321,10 @@ function leftHandIK() {
 let current = null;
 let paused = false;
 let ikFix = true;
-let groundScroll = 0;
+let groundScroll = 0, groundScrollX = 0;
 let lastClipTime = 0;
 const GROUPS = [
-  ['Locomotion', ['Idle', 'Walk', 'Run', 'ADS_Walk', 'HipFire_Walk']],
+  ['Locomotion', ['Idle', 'Walk', 'Run', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk']],
   ['Weapon', ['ADS_Idle', 'HipFire_Idle', 'ADS_Fire', 'ADS_Fire_Auto', 'HipFire_Fire', 'HipFire_Fire_Auto']],
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
@@ -404,7 +404,7 @@ function setMode(m) {
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
-    groundScroll = 0; gtex.offset.set(0, 0);
+    groundScroll = 0; groundScrollX = 0; gtex.offset.set(0, 0); props.position.set(0, 0, 0);
     setBase('Idle', 0.2);
     renderer.domElement.requestPointerLock?.();
   } else {
@@ -588,7 +588,9 @@ function updatePlay(dt) {
   // desired movement in camera frame
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   const r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
-  const moving = f !== 0; // W/S move along the soldier's own facing; A/D turn him (camera-independent)
+  // W/S forward/back and A/D strafe, all relative to the soldier's own facing; Q/E turn him.
+  // The camera never steers him. (Prone: A/D turn, since there is no prone strafe.)
+  const moving = f !== 0 || (r !== 0 && (sim.posture || 'stand') !== 'prone');
   const posture = sim.posture || 'stand';
   const run = (keys.ShiftLeft || keys.ShiftRight) && sim.aim === 'none' && f > 0 && posture === 'stand';
   let aimMode = sim.fire && sim.aim === 'none' ? 'hip' : sim.aim;
@@ -612,18 +614,31 @@ function updatePlay(dt) {
     return;
   }
 
-  let clip, speed = 0, timeScale = 1, lowerYaw = 0;
+  let clip, speed = 0, timeScale = 1, lowerYaw = 0, moveOff = 0;
   const P = { stand: { idle: 'Idle', walk: 'Walk', ads: 'ADS_Idle', adsWalk: 'ADS_Walk', hip: 'HipFire_Idle', hipWalk: 'HipFire_Walk' },
     crouch: { idle: 'Crouch_Idle', walk: 'Crouch_Walk', ads: 'Crouch_ADS_Idle', adsWalk: 'Crouch_ADS_Walk', hip: 'Crouch_ADS_Idle', hipWalk: 'Crouch_ADS_Walk' },
     prone: { idle: 'Prone_Idle', walk: 'Prone_Crawl', ads: 'Prone_Idle', adsWalk: 'Prone_Crawl', hip: 'Prone_Idle', hipWalk: 'Prone_Crawl' } }[posture];
   if (!sim.jumping) {
-    // A/D turn the soldier; the camera never steers him
     const turnRate = posture === 'prone' ? 0.9 : run ? 1.6 : aimMode !== 'none' ? 1.6 : 2.2;
-    if (r !== 0 && !sim.postureClip) sim.yaw -= r * turnRate * dt;
+    const turn = ((keys.KeyE ? 1 : 0) - (keys.KeyQ ? 1 : 0)) + (posture === 'prone' ? r : 0);
+    if (turn !== 0 && !sim.postureClip) sim.yaw -= turn * turnRate * dt;
     const back = f < 0;
+    const strafeOnly = f === 0 && r !== 0 && posture !== 'prone';
+    const diag = f !== 0 && r !== 0 && posture !== 'prone';
+    // moveOff: travel direction relative to facing (+ = left); diagonal walks turn the pelvis
+    if (strafeOnly) moveOff = r > 0 ? -Math.PI / 2 : Math.PI / 2;
+    else if (diag) { moveOff = (f > 0 ? -r : r) * deg(45); lowerYaw = moveOff; }
     if (posture === 'prone') {
-      if (moving) { clip = P.walk; speed = DEFS[clip].speed; if (back) timeScale = -1; }
+      if (f !== 0) { clip = P.walk; speed = DEFS[clip].speed; if (back) timeScale = -1; }
       else clip = P.idle;
+    } else if (strafeOnly && posture === 'stand') {
+      const side = r > 0 ? 'Right' : 'Left';
+      clip = aimMode === 'ads' ? `ADS_Strafe_${side}` : `Strafe_${side}`;
+      speed = DEFS[clip].speed;
+    } else if (strafeOnly) {
+      // crouched: crouch-walk with the pelvis turned sideways (no dedicated crouch strafe)
+      clip = aimMode !== 'none' ? P.adsWalk : P.walk;
+      lowerYaw = moveOff * 0.85; speed = DEFS[clip].speed;
     } else if (aimMode !== 'none') {
       if (moving) {
         clip = aimMode === 'ads' ? P.adsWalk : P.hipWalk;
@@ -648,8 +663,9 @@ function updatePlay(dt) {
     speed = sim.jumping === 'leap' ? DEFS[sim.leapBase].speed : 0;
   }
   sim.lowerYaw += (lowerYaw - sim.lowerYaw) * Math.min(1, dt * 10);
+  sim.moveOff = (sim.moveOff || 0) + wrapAngle(moveOff - (sim.moveOff || 0)) * Math.min(1, dt * 12);
   sim.speed += (speed - sim.speed) * Math.min(1, dt * 6);
-  const dirYaw = sim.yaw + sim.lowerYaw + (timeScale < 0 ? Math.PI : 0);
+  const dirYaw = sim.yaw + sim.moveOff + (timeScale < 0 ? Math.PI : 0);
   S.group.position.x += Math.sin(dirYaw) * sim.speed * dt;
   S.group.position.z += Math.cos(dirYaw) * sim.speed * dt;
   S.group.rotation.y = sim.yaw;
@@ -820,12 +836,15 @@ function frame() {
     if (viewerWall.visible) { const o = clip.userData.obstacle; viewerWall.position.set(0, o.wallHeight / 2, o.wallFront + o.wallThickness / 2); }
     // scroll the ground for in-place locomotion so planted feet stay locked to it
     if ($('#scroll').checked && clip.userData.speed && !paused) {
-      const ts = current.getEffectiveTimeScale();
-      groundScroll += clip.userData.speed * dt * ts * current.getEffectiveWeight();
+      const ts = current.getEffectiveTimeScale(), d = clip.userData.speed * dt * ts * current.getEffectiveWeight();
+      if (clip.userData.strafe) groundScrollX += (clip.userData.strafe === 'left' ? 1 : -1) * d;
+      else groundScroll += d;
     }
     // plane local +Y maps to world -Z, so the texture offset has the opposite sign of the props
     gtex.offset.y = -groundScroll / 2; // texture tile = 120/60 = 2 m
+    gtex.offset.x = groundScrollX / 2;
     props.position.z = -groundScroll;
+    props.position.x = -groundScrollX;
     // effects for fire clips
     const t = current.time;
     for (const s of clip.userData.shots || []) if ((lastClipTime < s && t >= s) || (t < lastClipTime && s <= t)) fireEffects();
