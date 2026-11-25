@@ -400,7 +400,7 @@ function setMode(m) {
   controls.enabled = m === 'view';
   if (m === 'play') {
     sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
-    sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null;
+    sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null;
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
@@ -469,7 +469,8 @@ window.addEventListener('mousemove', (e) => {
   if (mode !== 'play') return;
   const locked = document.pointerLockElement === renderer.domElement;
   if (!locked && !(e.buttons & 4)) return;
-  // chase camera: horizontal mouse movement doesn't orbit (Q/E turn the soldier and the camera follows)
+  // shooter-style mouse look: X turns the soldier (camera locked behind him), Y tilts the view
+  if (!sim.vault && !sim.postureClip) sim.yaw -= e.movementX * 0.0022 * (sim.aim === 'ads' || sim.eye ? 0.55 : 1) * ((sim.posture || 'stand') === 'prone' ? 0.5 : 1);
   sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + e.movementY * 0.002, -0.3, 0.6);
 });
 
@@ -654,6 +655,30 @@ function updatePlay(dt) {
     if (tname && !moving && [P.idle, P.ads, P.hip].includes(sim.base)) setBase(tname, 0.08);
     sim.lastAim = aimMode;
     const inTransition = sim.base && sim.base.includes('_To_') && actions[sim.base].isRunning() && !moving;
+    // turning on the spot: the feet stay planted while the upper body turns; past ~55 deg
+    // he takes a couple of quick steps to bring the feet round (no ice-skating pivot)
+    if (!moving && posture !== 'prone' && !inTransition) {
+      if (sim.feetYaw === undefined || sim.feetYaw === null) sim.feetYaw = sim.yaw;
+      let d = wrapAngle(sim.feetYaw - sim.yaw);
+      if (!sim.turnStep && Math.abs(d) > deg(55)) sim.turnStep = { t: 0, from: sim.feetYaw };
+      if (sim.turnStep) {
+        const ts = sim.turnStep; ts.t += dt;
+        const k = Math.min(1, ts.t / 0.38), e = k * k * (3 - 2 * k);
+        sim.feetYaw = ts.from + wrapAngle(sim.yaw - ts.from) * e;
+        d = wrapAngle(sim.feetYaw - sim.yaw);
+        // stepping feet: a short burst of the walk cycle (no travel)
+        clip = aimMode === 'ads' ? P.adsWalk : aimMode === 'hip' ? P.hipWalk : P.walk;
+        timeScale = 0.9;
+        if (k >= 1) sim.turnStep = null;
+      }
+      sim.lowerYaw = THREE.MathUtils.clamp(d, -deg(70), deg(70));
+      lowerYaw = sim.lowerYaw;
+    } else { sim.feetYaw = sim.yaw + sim.lowerYaw; sim.turnStep = null; }
+    // momentum: playback rate follows the actual ground speed while speeding up / slowing
+    // down, so the feet stay locked to the ground through starts, stops and walk<->run
+    if (!inTransition && DEFS[clip] && DEFS[clip].speed && speed > 0) {
+      timeScale *= THREE.MathUtils.clamp(Math.max(sim.speed, 0.25 * speed) / DEFS[clip].speed, 0.3, 1.0);
+    }
     if (!inTransition) setBase(clip, 0.22, timeScale);
   } else {
     // running leap keeps the run speed (its planted feet move at exactly that speed);
@@ -777,7 +802,8 @@ function updatePlayCamera(dt) {
     camera.near = eyeThroughSight() ? 0.07 : 0.04; camera.updateProjectionMatrix(); // clip the helmet brim; the optic is ~0.28 m away
     return;
   }
-  camera.fov = sim.aim === 'ads' ? 30 : 42; camera.near = 0.02; camera.updateProjectionMatrix();
+  const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
+  camera.fov += (fovWant - camera.fov) * Math.min(1, dt * 6); camera.near = 0.02; camera.updateProjectionMatrix();
   const dist = (sim.aim === 'ads' ? 2.1 : 2.6) * (sim.zoom || 1); // mouse wheel scales the orbit radius
   const side = sim.aim === 'ads' ? -0.75 : -0.55;
   const ph = { stand: sim.aim === 'ads' ? 1.6 : 1.55, crouch: 1.15, prone: 0.75 }[sim.posture || 'stand'];
@@ -807,8 +833,8 @@ function frame() {
     updatePlay(dt);
     mixer.update(dt);
     applyLowerBodyYaw();
-    // chase camera: stays behind the soldier and swings round smoothly when he turns
-    sim.camYaw += wrapAngle(sim.yaw - sim.camYaw) * Math.min(1, dt * 8);
+    // chase camera: locked behind the soldier (eases only while a vault re-aligns him)
+    sim.camYaw = sim.vault ? sim.camYaw + wrapAngle(sim.yaw - sim.camYaw) * Math.min(1, dt * 8) : sim.yaw;
     updatePlayCamera(dt);
     const posture = sim.posture || 'stand';
     const aiming = !sim.jumping && !sim.vault && !sim.postureClip && (sim.aim !== 'none' || sim.fire || posture === 'prone') && !(posture === 'prone' && sim.speed > 0.05);
