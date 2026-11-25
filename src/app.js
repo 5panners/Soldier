@@ -469,7 +469,7 @@ window.addEventListener('mousemove', (e) => {
   if (mode !== 'play') return;
   const locked = document.pointerLockElement === renderer.domElement;
   if (!locked && !(e.buttons & 4)) return;
-  sim.camYaw -= e.movementX * 0.0025;
+  // chase camera: horizontal mouse movement doesn't orbit (Q/E turn the soldier and the camera follows)
   sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + e.movementY * 0.002, -0.3, 0.6);
 });
 
@@ -580,10 +580,8 @@ function updatePlay(dt) {
     }
     sim.lastLocoPhase = f0;
   } else sim.lastLocoPhase = undefined;
-  // arrow keys orbit the camera (same as moving the mouse): left/right turn, up/down tilt
-  const orbitX = (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0);
+  // chase camera: up/down arrows (or the mouse) tilt the view; it never orbits around him
   const orbitY = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
-  if (orbitX) sim.camYaw -= orbitX * 2.2 * dt;
   if (orbitY) sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + orbitY * 1.1 * dt, -0.3, 0.6);
   // desired movement in camera frame
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
@@ -809,6 +807,8 @@ function frame() {
     updatePlay(dt);
     mixer.update(dt);
     applyLowerBodyYaw();
+    // chase camera: stays behind the soldier and swings round smoothly when he turns
+    sim.camYaw += wrapAngle(sim.yaw - sim.camYaw) * Math.min(1, dt * 8);
     updatePlayCamera(dt);
     const posture = sim.posture || 'stand';
     const aiming = !sim.jumping && !sim.vault && !sim.postureClip && (sim.aim !== 'none' || sim.fire || posture === 'prone') && !(posture === 'prone' && sim.speed > 0.05);
