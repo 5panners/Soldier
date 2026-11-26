@@ -741,6 +741,36 @@ function ladderClip() {
   return { name: 'Ladder_Climb', duration: T, loop: true, speed: 0, frames, climb: CLIMB, climbCycle: CYC };
 }
 
+/** Seated at a desk, hands on the keyboard, looking at the monitors; the rifle slung on the back. */
+function seatedClip() {
+  const T = 4.0, N = Math.round(T * FPS), frames = [];
+  const handQ = (side) => { // palm down, fingers forward
+    const a = V3(0, 0, 1), p = V3(0, -1, 0), m = new THREE.Matrix4();
+    if (side === 'Left') m.makeBasis(a, p.clone().negate(), V3().crossVectors(p, a));
+    else m.makeBasis(a.clone().negate(), p.clone().negate(), V3().crossVectors(a, p));
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+  };
+  const HQ = { Left: handQ('Left'), Right: handQ('Right') };
+  for (let n = 0; n < N; n++) {
+    const t = n / N, br = Math.sin(TAU * t * 2); // two slow breaths per loop
+    const feet = {};
+    for (const [sd, sx] of [['Left', 1], ['Right', -1]]) feet[sd] = { pos: V3(sx * 0.15, ANKLE_HEIGHT_C, 0.42), quat: footQuat(0, sx * deg(6)), toe: 0 };
+    const typing = (sd) => 0.008 * Math.sin(TAU * t * (sd === 'Left' ? 9 : 7));
+    frames.push({
+      hips: { pos: V3(0, 0.6, -0.04), quat: qEuler(deg(-8), 0, 0) }, chest: qEuler(deg(8 + 0.8 * br), deg(2) * Math.sin(TAU * t), 0), spineDist: [0.27, 0.34, 0.39],
+      head: qEuler(deg(9 + 2 * Math.sin(TAU * t)), deg(6) * Math.sin(TAU * t + 1), 0),
+      clavicle: { Left: qEuler(0, deg(-8), deg(2 + br)), Right: qEuler(0, deg(8), deg(-2 - br)) },
+      feet, kneePole: { Left: V3(0.15, 0.3, 1).normalize(), Right: V3(-0.15, 0.3, 1).normalize() },
+      weapon: (ctx) => { const c = ctx.W.Spine2; return { pos: V3(0.1, -0.32, -0.36).applyQuaternion(c.quat).add(c.pos), quat: c.quat.clone().multiply(qEuler(deg(-90), deg(-10), 0)) }; },
+      freeHand: { Left: () => ({ pos: V3(0.2, 0.8 + typing('Left'), 0.4), quat: HQ.Left }), Right: () => ({ pos: V3(-0.2, 0.8 + typing('Right'), 0.4), quat: HQ.Right }) },
+      elbowPole: { Left: V3(0.5, -1, -0.4).normalize(), Right: V3(-0.5, -1, -0.4).normalize() },
+      fingers: { Left: FINGERS_L.cup, Right: { index: [0.35, 0.4, 0.3], middle: [0.4, 0.5, 0.35], thumb: [0.2, 0.2, 0.2], thumbOpp: 0.4 } },
+    });
+  }
+  frames.push(frames[0]);
+  return { name: 'Seated_Desk', duration: T, loop: true, speed: 0, frames };
+}
+
 function strafeClip(name, dir, upper, o = {}) {
   const T = o.T ?? 0.86, L = o.L ?? 0.60, s = 0.60, v = L / T;
   // planted x ranges (for dir = +1): lead foot from a down to a - s*L, trail foot from b down;
@@ -1072,6 +1102,7 @@ export function buildClipLibrary() {
   clips.push(locomotion('Run', GAITS.run, RUN_UPPER));
   // running jumps out of the run cycle (take-off on the right or the left foot)
   clips.push(ladderClip());
+  clips.push(seatedClip());
   clips.push(runJumpClip('Run_Jump', 0.0, RUN_UPPER));
   clips.push(runJumpClip('Run_Jump_Left', 0.5, RUN_UPPER));
 

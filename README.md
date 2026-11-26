@@ -157,18 +157,20 @@ npm run validate
 npm run export
 ```
 
-## Test map: desert military base
+## Test map: Camp Edelweiss
 
-Play mode takes place on a desert military base (`src/map.js`), about 460 x 425 m inside the wire, with dunes beyond. You spawn at the main road junction facing north.
+Play mode takes place at Camp Edelweiss (`src/map.js`), a fictional training garrison in a forested alpine valley. The camp is about 380 x 350 m inside the wire. Around it are hills, forest, meadows and mountains, and a village with a church lies at the end of the valley road. You spawn just inside the main gate, facing north.
 
-* **Airfield (north):** a 400 m runway with markings and end lights, a taxiway, a concrete apron, two open-fronted hangars (one with a light aircraft inside) and a control tower whose glazed cab you reach by the ladder on its south face.
-* **Helipad (north-east):** marked pad with edge lights, a parked utility helicopter, a windsock and HESCO walls.
-* **Vehicle park (east):** concrete hard standing with cargo trucks, patrol vehicles and wheeled APCs, two workshops with open bays, an office, benches and a vehicle on the lift, a fuel point inside a HESCO bund, and a container yard.
-* **MOUT village (west):** a walled compound for building-clearance drills. The 1 m compound walls can be vaulted. Inside are a three-room house, a two-storey house with an internal stair, a corridor building with five rooms, and huts. Every building has doorways and glass windows.
-* **Firing range (south-west):** a covered firing point with benches and sandbags, six lanes with targets at 25, 50 and 100 m that fall when hit and pop back up after 3 s, side berms, a stop butt, a range flag and a control hut.
-* **Perimeter:** chain-link fence with barbed wire, a south gate with a HESCO chicane, sandbagged sangars and a boom barrier, and eight lookout towers (6 m platforms with sandbag parapets and roofs) that you climb by ladder.
-* **Also:** HQ / accommodation blocks with glazed windows, a flagpole, a water tower, sandbag positions, scrub and rocks.
+![Camp overview](docs/images/base_tour.png)
+![Camp areas](docs/images/base_areas.png)
 
-![Base tour](docs/images/base_tour.png)
+* **Main gate:** a guard booth with windows, a boom barrier, jersey-barrier lanes and a chicane, a halt sign, concrete T-walls, the camp sign and two flags, street lights, a patrol vehicle with a gunner's turret, guards, and lookout towers either side.
+* **HQ and TOC:** a two-storey HQ with a pitched roof, porch, flag and parked patrol vehicles. The tactical operations centre is windowless and enterable. Inside are two rows of operator desks with three live monitors each (maps, drone feeds, unit status), operators seated at them, four wall screens, the TOC sign, server racks with status lights and light panels. Outside are AC units, a generator under a camo net, an antenna mast and a satellite dish.
+* **Barracks:** eight pitched-roof blocks with glazed windows, porches, AC units, picnic tables, portable toilets and a smoking shelter.
+* **Motor pool:** an arched maintenance shed with a vehicle on the lift, rows of cargo trucks, fuel tankers, 8x8 APCs and patrol vehicles under a camo net, a container stack and a fuel point.
+* **Airfield:** an apron with eight helicopter pads (attack and utility helicopters), two arched hangars, a control tower with a glazed cab reached by ladder, a runway with markings, floodlight masts, a windsock, a fuel truck and ground power carts.
+* **Training area:** a ruined village in the woods with jagged shelled walls, charred rafters, rubble and smoke. It also has two intact houses for building-clearance drills (one with an internal stair, both with glass windows), a wrecked car, stone walls you can vault, a dirt track, an APC and a patrol.
+* **Firing range:** a covered firing point with benches and sandbags, five lanes with reactive targets at 25, 50 and 100 m, and a stop butt.
+* **Perimeter:** a security fence with angled barbed-wire outriggers, and eight lookout towers with sandbag parapets and ladders.
 
-Glass windows shatter when shot and the round carries on through. Every solid is a collider, and floors, stairs, roofs and platforms are walkable at their own heights. The camera is kept out of walls. The viewer shows the soldier alone on the sand.
+Other soldiers around the camp are posed with the soldier's own clips (`Idle`, `ADS_Idle`, `HipFire_Idle`, `Crouch_ADS_Idle` and the new `Seated_Desk`). Glass shatters when shot and the round carries on through. Range targets fall when hit and pop back up. Every solid blocks you, and floors, stairs, roofs and platforms can be walked on. The viewer shows the soldier on the grass with the mountains behind.

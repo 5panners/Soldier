@@ -23,11 +23,11 @@ renderer.toneMappingExposure = 1.05;
 $('#view').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const SKY = new THREE.Color('#c6d8e6');
+const SKY = new THREE.Color('#c9dbe8');
 scene.background = SKY;
-scene.fog = new THREE.Fog('#dccdb0', 140, 700); // desert haze
-scene.add(new THREE.HemisphereLight('#e9f0f5', '#b39566', 1.15));
-const sun = new THREE.DirectionalLight('#fff0d4', 3.0);
+scene.fog = new THREE.Fog('#c3d3de', 350, 3400); // valley haze
+scene.add(new THREE.HemisphereLight('#e6eef4', '#5d6a42', 1.2));
+const sun = new THREE.DirectionalLight('#fff3dc', 2.9);
 sun.position.set(4, 8, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -37,7 +37,7 @@ scene.add(sun, sun.target);
 
 // ------------------------------------------------------------------ the map: a desert military base (play mode)
 const MAP = buildMap();
-scene.add(MAP.ground, MAP.root);
+scene.add(MAP.ground, MAP.root, MAP.sky);
 const ground = MAP.ground, gtex = MAP.groundTex;
 const COLLIDERS = MAP.colliders, WALLS = MAP.walls, LADDERS = MAP.ladders;
 const structures = MAP.root;
@@ -50,8 +50,8 @@ function groundH(x, z, ref = S.group.position.y + (sim.rise || 0)) {
 // viewer decor: rocks and scrub that scroll past while a locomotion clip plays in the viewer
 const props = new THREE.Group(); props.visible = false;
 {
-  const rockM = new THREE.MeshStandardMaterial({ color: '#a78b68', flatShading: true, roughness: 1 });
-  const bushM = new THREE.MeshStandardMaterial({ color: '#7f7a4c', flatShading: true, roughness: 1 });
+  const rockM = new THREE.MeshStandardMaterial({ color: '#8c8a84', flatShading: true, roughness: 1 });
+  const bushM = new THREE.MeshStandardMaterial({ color: '#4f6e35', flatShading: true, roughness: 1 });
   let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 70; i++) {
     const r = 5 + rnd() * 40, a = rnd() * Math.PI * 2, rock = rnd() < 0.4, sz = rock ? 0.3 + rnd() * 0.7 : 0.25 + rnd() * 0.5;
@@ -229,6 +229,17 @@ for (const [n, c] of Object.entries(CLIPS)) {
   if (!c.userData.loop) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
   actions[n] = a;
 }
+// soldiers placed by the map (gate guards, TOC operators, a patrol in the training area), each posed
+// with one of the soldier's own clips
+const NPC_MIXERS = [];
+for (const n of MAP.npcs) {
+  const N = buildSoldier();
+  N.group.position.set(n.x, MAP.terrainH(n.x, n.z) + (n.y || 0), n.z); N.group.rotation.y = n.yaw;
+  N.mesh.castShadow = true; N.rifle.castShadow = true;
+  const mx = new THREE.AnimationMixer(N.group), a = mx.clipAction(CLIPS[n.clip] || CLIPS.Idle);
+  a.play(); a.time = Math.random() * a.getClip().duration;
+  MAP.root.add(N.group); NPC_MIXERS.push(mx);
+}
 // additive recoil layers (relative to the static stance pose)
 const additive = {};
 for (const [fire, ref] of [['ADS_Fire_Auto', 'ADS_Pose'], ['HipFire_Fire_Auto', 'HipFire_Pose'], ['Crouch_ADS_Fire_Auto', 'Crouch_ADS_Pose'], ['Prone_Fire_Auto', 'Prone_Pose']]) {
@@ -240,7 +251,7 @@ for (const [fire, ref] of [['ADS_Fire_Auto', 'ADS_Pose'], ['HipFire_Fire_Auto', 
 }
 
 // ------------------------------------------------------------------ cameras
-const camera = new THREE.PerspectiveCamera(40, 1, 0.02, 1600);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.02, 6000);
 camera.position.set(-2.4, 1.7, 3.0);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.05, 0.2);
@@ -580,7 +591,7 @@ function setMode(m) {
     sim.rig = null; sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
     sim.god = false; sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.falling = false; sim.vy = 0;
     viewerWall.visible = false; MAP.root.visible = true; props.visible = false;
-    S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
+    S.group.position.set(MAP.spawn.x, 0, MAP.spawn.z); S.group.rotation.set(0, 0, 0); sim.yaw = sim.camYaw = MAP.spawn.yaw;
     document.activeElement?.blur?.();
     groundScroll = 0; groundScrollX = 0; gtex.offset.set(0, 0); props.position.set(0, 0, 0);
     setBase('Idle', 0.2);
@@ -1223,7 +1234,7 @@ function frame() {
   if (ikFix && !sim.ladder) leftHandIK();
   updateHitViz();
   updateHint();
-  if (mode === 'play') MAP.update(Math.min(0.05, dt));
+  if (mode === 'play') { MAP.update(Math.min(0.05, dt)); for (const mx of NPC_MIXERS) mx.update(dt); }
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }

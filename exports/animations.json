@@ -99,6 +99,13 @@
     "climb": 0.75,
     "climbCycle": 0.6
   },
+  "Seated_Desk": {
+    "duration": 4,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
   "Run_Jump": {
     "duration": 1.225,
     "loop": false,
