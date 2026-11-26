@@ -482,7 +482,7 @@ function leftHandIK() {
   // current hand in weapon space -> nearest valid support-hand grip on the handguard
   _m.copy(S.rifle.matrixWorld).invert();
   const wrist = B.LeftHand.getWorldPosition(new THREE.Vector3()).applyMatrix4(_m);
-  const z = THREE.MathUtils.clamp(wrist.z + 0.045, 0.22, 0.37);
+  const z = THREE.MathUtils.clamp(wrist.z + 0.045, 0.19, 0.37);
   // keep however far below the handguard the clip holds the hand (the aimed stances hold it low)
   const drop = THREE.MathUtils.clamp(leftGrip(z, 'cup').pos.y - wrist.y, 0, 0.08);
   const g = leftGrip(z, 'cup', drop);

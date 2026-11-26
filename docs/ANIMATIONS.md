@@ -85,7 +85,7 @@ The aiming head, neck and shoulder postures aren't hand-posed. They are solved s
 
 ![ADS head posture before (left) and after (right)](images/ads_neck.png)
 
-The support hand holds the handguard 3 cm lower when aiming so its fingers stay out of the sight window. Through the optic, before (left) and after (right):
+The support hand holds the handguard 3 cm lower, and 8 cm further back toward the body (elbow bent), when aiming, so its fingers stay out of the sight window and the arm looks relaxed. Through the optic, before (left) and after (right):
 
 ![ADS sight picture before and after](images/ads_hand_eye.png)
 

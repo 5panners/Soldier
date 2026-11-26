@@ -160,7 +160,7 @@ export const GRIPS = {
   right: rightGrip(),
   leftCup: leftGrip(0.31, 'cup'),
   // support hand 3 cm below the handguard so the fingers stay out of the sight picture
-  leftAds: leftGrip(0.285, 'cup', 0.03),
+  leftAds: leftGrip(0.205, 'cup', 0.03),
   leftFar: leftGrip(0.355, 'cup'),
   leftNear: leftGrip(0.27, 'cup'),
   leftLow: leftGrip(0.235, 'cup'),
