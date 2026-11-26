@@ -589,7 +589,7 @@ function setMode(m) {
   controls.enabled = m === 'view';
   if (m === 'play') {
     sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
-    sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.falling = false; sim.vy = 0;
+    sim.god = false; sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.falling = false; sim.vy = 0;
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
@@ -629,7 +629,15 @@ window.addEventListener('keydown', (e) => {
     }
     else startJump(); // two-footed standing jump only from a standstill
   }
-  if (e.code === 'KeyV') sim.eye = !sim.eye;
+  if (e.code === 'KeyV') { sim.eye = !sim.eye; if (sim.eye) sim.god = false; }
+  if (e.code === 'KeyG') {
+    sim.god = !sim.god;
+    if (sim.god) { // start from the current chase view, then orbit freely
+      sim.eye = false;
+      sim.godYaw = sim.yaw; sim.godPitch = 0.25; sim.godDist = 3.2 * (sim.zoom || 1);
+      sim.godTarget = 1.0;
+    }
+  }
   if (e.code === 'KeyL') sim.laser = !sim.laser;
   if (e.code === 'KeyB') colliderViz.visible = !colliderViz.visible;
   if (e.code === 'KeyH') sim.aim = sim.aim === 'hip' ? 'none' : 'hip';
@@ -652,12 +660,18 @@ renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 renderer.domElement.addEventListener('wheel', (e) => {
   if (mode !== 'play') return;
   e.preventDefault();
+  if (sim.god) { sim.godDist = THREE.MathUtils.clamp(sim.godDist * Math.exp(e.deltaY * 0.0012), 0.6, 25); return; }
   sim.zoom = THREE.MathUtils.clamp((sim.zoom || 1) * Math.exp(e.deltaY * 0.0012), 0.5, 4);
 }, { passive: false });
 window.addEventListener('mousemove', (e) => {
   if (mode !== 'play') return;
   const locked = document.pointerLockElement === renderer.domElement;
   if (!locked && !(e.buttons & 4)) return;
+  if (sim.god) { // god cam: the mouse only orbits the camera, the soldier is not turned
+    sim.godYaw -= e.movementX * 0.005;
+    sim.godPitch = THREE.MathUtils.clamp(sim.godPitch + e.movementY * 0.005, -1.45, 1.45);
+    return;
+  }
   // shooter-style mouse look: X turns the soldier (camera locked behind him), Y tilts the view
   if (!sim.vault && !sim.postureClip) sim.yaw -= e.movementX * 0.0022 * (sim.aim === 'ads' || sim.eye ? 0.55 : 1) * ((sim.posture || 'stand') === 'prone' ? 0.5 : 1);
   sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + e.movementY * 0.002, -0.3, 0.6);
@@ -787,7 +801,11 @@ function updatePlay(dt) {
   } else sim.lastLocoPhase = undefined;
   // chase camera: up/down arrows (or the mouse) tilt the view; it never orbits around him
   const orbitY = (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0);
-  if (orbitY) sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + orbitY * 1.1 * dt, -0.3, 0.6);
+  if (sim.god) { // god cam: arrows orbit all the way round, R / F raise and lower the look-at point
+    sim.godYaw += ((keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0)) * 1.6 * dt;
+    sim.godPitch = THREE.MathUtils.clamp(sim.godPitch + orbitY * 1.1 * dt, -1.45, 1.45);
+    sim.godTarget = THREE.MathUtils.clamp(sim.godTarget + ((keys.KeyR ? 1 : 0) - (keys.KeyF ? 1 : 0)) * 1.0 * dt, 0.1, 2.2);
+  } else if (orbitY) sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + orbitY * 1.1 * dt, -0.3, 0.6);
   // desired movement in camera frame
   const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   const r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -1005,6 +1023,16 @@ function eyeThroughSight() {
 function updatePlayCamera(dt) {
   const B = S.bones;
   S.group.updateMatrixWorld(true);
+  if (sim.god) {
+    const pivot = S.group.position.clone().add(new THREE.Vector3(0, sim.godTarget, 0));
+    const cp = Math.cos(sim.godPitch), d = sim.godDist;
+    const want = pivot.clone().add(new THREE.Vector3(Math.sin(sim.godYaw) * cp * d, Math.sin(sim.godPitch) * d, Math.cos(sim.godYaw) * cp * d));
+    want.y = Math.max(want.y, S.group.position.y + 0.05, groundH(want.x, want.z) + 0.1);
+    camera.position.lerp(want, 1 - Math.exp(-dt * 20));
+    camera.lookAt(pivot);
+    camera.fov += (45 - camera.fov) * Math.min(1, dt * 8); camera.near = 0.05; camera.updateProjectionMatrix();
+    return;
+  }
   if (sim.eye) {
     const eye = RIGHT_EYE_LOCAL.clone().applyMatrix4(B.Head.matrixWorld);
     camera.position.copy(eye);
@@ -1072,7 +1100,7 @@ function frame() {
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
-    document.body.classList.toggle('eyeview', !!sim.eye && eyeThroughSight());
+    document.body.classList.toggle('eyeview', (!!sim.eye && eyeThroughSight()) || !!sim.god);
     laser.visible = sim.laser;
     if (sim.laser) {
       const { p, d } = boreRay();
