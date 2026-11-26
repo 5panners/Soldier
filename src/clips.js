@@ -123,7 +123,7 @@ export const GAITS = {
   walk: {
     // upright patrol walk: ~107 steps/min, near-straight stance leg, soft heel strikes, easy roll-off
     T: 1.12, v: 1.15, stance: 0.62, heelRock: 0.14, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
-    hsPitch: deg(10), toePitch: deg(32), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
+    hsPitch: deg(10), toePitch: deg(48), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
     swingInset: 0.012, landVy: 0.06, pitchEase: 2.4, swingToe: deg(6),
     hips: (p) => ({
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
