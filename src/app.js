@@ -244,6 +244,63 @@ scene.add(S.group);
 const skeletonHelper = new THREE.SkeletonHelper(S.group);
 skeletonHelper.visible = false;
 scene.add(skeletonHelper);
+
+// ------------------------------------------------------------------ bounding boxes (option)
+// One switch (the "Bounding boxes" checkbox, or B) shows every collider: the props' hit boxes
+// (orange), the soldier's own per-limb hit boxes (cyan, attached to the bones), his overall
+// bounding box (green) and the cylinder that collides with props (yellow).
+const hitViz = new THREE.Group(); hitViz.visible = false; scene.add(hitViz);
+const HITBOXES = [];
+{
+  const lm = new THREE.LineBasicMaterial({ color: '#38d6ff', depthTest: false, transparent: true, opacity: 0.9 });
+  const add = (bone, size, center, dir = null) => { // axis-aligned box in the bone's bind frame (dir: rotate Y onto dir)
+    const g = new THREE.BoxGeometry(size[0], size[1], size[2]);
+    if (dir) g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+    const l = new THREE.LineSegments(new THREE.EdgesGeometry(g), lm);
+    l.matrixAutoUpdate = false; l.renderOrder = 10; l.frustumCulled = false;
+    hitViz.add(l);
+    HITBOXES.push({ bone, local: new THREE.Matrix4().makeTranslation(center[0], center[1], center[2]), l });
+  };
+  const seg = (a, b, r) => { // limb segment from bone a to bone b
+    const d = BIND_LOCAL[b], len = d.length();
+    add(a, [2 * r, len, 2 * r], [d.x / 2, d.y / 2, d.z / 2], d);
+  };
+  add('Head', [0.20, 0.25, 0.25], [0, 0.082, 0.01]);
+  add('Spine2', [0.40, 0.32, 0.28], [0, 0.07, 0]);
+  add('Spine', [0.36, 0.25, 0.26], [0, 0.06, 0]);
+  add('Hips', [0.38, 0.20, 0.26], [0, -0.02, 0]);
+  for (const sd of ['Left', 'Right']) {
+    const s = sd === 'Left' ? 1 : -1;
+    seg(`${sd}Arm`, `${sd}ForeArm`, 0.065);
+    seg(`${sd}ForeArm`, `${sd}Hand`, 0.055);
+    add(`${sd}Hand`, [0.12, 0.05, 0.10], [0.06 * s, 0, 0.0]);
+    seg(`${sd}UpLeg`, `${sd}Leg`, 0.09);
+    seg(`${sd}Leg`, `${sd}Foot`, 0.07);
+    add(`${sd}Foot`, [0.11, 0.09, 0.28], [0, -0.04, 0.05]);
+  }
+  // overall bounding box (rebuilt every frame from the bone positions) and the prop-collision cylinder
+  const bm = new THREE.LineBasicMaterial({ color: '#6dff6d', depthTest: false, transparent: true, opacity: 0.9 });
+  hitViz.userData.box = new THREE.Box3();
+  hitViz.userData.helper = new THREE.Box3Helper(hitViz.userData.box, '#6dff6d'); hitViz.userData.helper.material = bm; hitViz.userData.helper.frustumCulled = false; hitViz.userData.helper.renderOrder = 10;
+  hitViz.add(hitViz.userData.helper);
+  const cyl = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.CylinderGeometry(0.32, 0.32, 1.8, 20)), new THREE.LineBasicMaterial({ color: '#ffd23f', depthTest: false, transparent: true, opacity: 0.8 }));
+  cyl.renderOrder = 10; cyl.frustumCulled = false; hitViz.userData.cyl = cyl; hitViz.add(cyl);
+}
+const _bp = new THREE.Vector3();
+function updateHitViz() {
+  colliderViz.position.copy(props.position); // the viewer scrolls the props past the soldier
+  if (!hitViz.visible) return;
+  S.group.updateMatrixWorld(true);
+  for (const h of HITBOXES) { h.l.matrix.multiplyMatrices(S.bones[h.bone].matrixWorld, h.local); h.l.matrixWorldNeedsUpdate = true; }
+  const box = hitViz.userData.box.makeEmpty();
+  for (const n in S.bones) box.expandByPoint(S.bones[n].getWorldPosition(_bp));
+  box.min.addScalar(-0.09); box.max.addScalar(0.09); box.min.y = Math.min(box.min.y, S.group.position.y);
+  const cy = hitViz.userData.cyl; cy.position.set(S.group.position.x, S.group.position.y + 0.9, S.group.position.z);
+}
+function setBoundingBoxes(on) {
+  colliderViz.visible = on; hitViz.visible = on;
+  const cb = document.querySelector('#bbox'); if (cb) cb.checked = on;
+}
 const muzzleNode = S.rifle.getObjectByName('Muzzle');
 const ejectNode = S.rifle.getObjectByName('Ejection');
 
@@ -576,6 +633,7 @@ function buildUI() {
   $('#pause').onclick = () => { paused = !paused; $('#pause').textContent = paused ? '▶ Play' : '❚❚ Pause'; };
   $('#step').onclick = () => { paused = true; $('#pause').textContent = '▶ Play'; mixer.update(1 / 60); };
   $('#skel').onchange = (e) => (skeletonHelper.visible = e.target.checked);
+  $('#bbox').onchange = (e) => setBoundingBoxes(e.target.checked);
   $('#wire').onchange = (e) => { S.mesh.material.wireframe = e.target.checked; S.rifle.material.wireframe = e.target.checked; };
   $('#ikfix').onchange = (e) => (ikFix = e.target.checked);
   $('#scroll').onchange = () => {};
@@ -658,7 +716,7 @@ window.addEventListener('keydown', (e) => {
     }
   }
   if (e.code === 'KeyL') sim.laser = !sim.laser;
-  if (e.code === 'KeyB') colliderViz.visible = !colliderViz.visible;
+  if (e.code === 'KeyB') setBoundingBoxes(!colliderViz.visible);
   if (e.code === 'KeyH') sim.aim = sim.aim === 'hip' ? 'none' : 'hip';
   if (e.code === 'KeyC') sim.wantPosture = (sim.posture || 'stand') === 'crouch' ? 'stand' : 'crouch';
   if (e.code === 'KeyZ') sim.wantPosture = (sim.posture || 'stand') === 'prone' ? 'stand' : 'prone';
@@ -1124,6 +1182,7 @@ function frame() {
     mixer.update(dt);
   }
   if (ikFix) leftHandIK();
+  updateHitViz();
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
