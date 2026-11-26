@@ -91,25 +91,25 @@
     "events": {}
   },
   "Run_Jump": {
-    "duration": 1.315,
+    "duration": 1.225,
     "loop": false,
     "inPlaceSpeed": 5.2,
     "shots": [],
     "events": {
       "takeoff": 0.165,
-      "land": 0.985
+      "land": 0.895
     },
     "runPhaseStart": 0,
     "runPhaseEnd": 0
   },
   "Run_Jump_Left": {
-    "duration": 1.315,
+    "duration": 1.225,
     "loop": false,
     "inPlaceSpeed": 5.2,
     "shots": [],
     "events": {
       "takeoff": 0.165,
-      "land": 0.985
+      "land": 0.895
     },
     "runPhaseStart": 0.5,
     "runPhaseEnd": 0.5

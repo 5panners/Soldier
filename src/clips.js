@@ -506,7 +506,9 @@ function jumpClips() {
  * heel strike of the take-off foot and ends one full stride later, so it hands straight
  * back to Run at the same phase.
  */
-function runJumpClip(name, startPhase, upper, F = 0.82) {
+function runJumpClip(name, startPhase, upper, F = 0.73) {
+  // snappier than real gravity (1.5 g): a higher leap (about 1 m) that spends less time hanging at the top
+  const GJ = G * 1.53;
   const g = GAITS.run, T = g.T, sf = g.stance;
   const flightFrac = 0.5 - sf;               // fraction of the cycle in each normal flight
   const tTO = sf * T, tLand = tTO + F, tEnd = tLand + (0.5 - flightFrac + 0.5 - sf) * T + flightFrac * T;
@@ -525,7 +527,7 @@ function runJumpClip(name, startPhase, upper, F = 0.82) {
   };
   const dy = (ph) => (yRun(ph + 0.002) - yRun(ph - 0.002)) / (0.004 * T);
   const s0 = startPhase;
-  const v0 = (G * F) / 2, yTO = yRun(s0 + sf);
+  const v0 = (GJ * F) / 2, yTO = yRun(s0 + sf);
   const N = Math.round(duration * FPS), rows = [];
   for (let n = 0; n <= N; n++) {
     const t = (n / N) * duration, ph = s0 + phaseAt(t);
@@ -533,7 +535,7 @@ function runJumpClip(name, startPhase, upper, F = 0.82) {
     const h = g.hips(ph), quat = qEuler(h.pitch, h.yaw, h.roll);
     let y;
     if (t <= tTO) y = hermite(yRun(s0), dy(s0), yTO, v0, tTO, t / tTO);
-    else if (t <= tLand) { const tau = t - tTO; y = yTO + v0 * tau - 0.5 * G * tau * tau; }
+    else if (t <= tLand) { const tau = t - tTO; y = yTO + v0 * tau - 0.5 * GJ * tau * tau; }
     else {
       // landing: the downward speed is absorbed by the leg (a damped dip of ~8 cm) while the
       // pelvis blends back onto the normal run curve
@@ -542,7 +544,7 @@ function runJumpClip(name, startPhase, upper, F = 0.82) {
       y = base - v0 * tau * Math.exp(-tau / 0.085);
     }
     // planted feet must stay reachable (the take-off push straightens the leg)
-    y = Math.min(y, hipsReachBound(h.pos, quat, { Left: L, Right: R }, 0.997));
+    y = Math.min(y, hipsReachBound(h.pos, quat, { Left: L, Right: R }));
     // airborne legs ride up with the body (they were planned for normal run height) and the
     // knees tuck a little through the stretched flight; both fade to zero at the contacts
     const air = t > tTO && t < tLand ? Math.sin(Math.PI * (t - tTO) / F) : 0;
@@ -559,7 +561,7 @@ function runJumpClip(name, startPhase, upper, F = 0.82) {
     rows.push({ t, ph, h, quat, y, feet: { Left: L, Right: R } });
   }
   const acc = secondDerivative(rows.map((r) => r.y), DT, false).map((a, i) => {
-    const t = rows[i].t; return t > tTO && t < tLand ? a + G : a; // rifle and body fall together
+    const t = rows[i].t; return t > tTO && t < tLand ? a + GJ : a; // rifle and body fall together
   });
   const lag = oneShotSpring(acc, DT, 4.5, 0.6).map((x) => Math.max(-0.015, Math.min(0.015, x * 0.3)));
   const frames = rows.map((r, i) => {
@@ -633,7 +635,7 @@ function walkJumpClip(name, startPhase, upper, F = 0.58, tPush = 0.30) {
       y = lerp(yTO, yWalk(body), w) - v0 * tau * Math.exp(-tau / 0.08);
     }
     const feet = sideA < 0 ? { Right: A, Left: B } : { Left: A, Right: B };
-    y = Math.min(y, hipsReachBound(h.pos, quat, feet, 0.997));
+    y = Math.min(y, hipsReachBound(h.pos, quat, feet));
     const air = t > tTO && t < tL ? Math.sin(Math.PI * (t - tTO) / F) : 0;
     const lift = (y - yWalk(body)) * Math.sqrt(air) + 0.07 * air;
     const reachMax = (LEG_UPPER + LEG_LOWER) * 0.999, soft = 0.03, hp = V3(h.pos.x, y, h.pos.z);
