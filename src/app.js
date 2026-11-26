@@ -483,7 +483,9 @@ function leftHandIK() {
   _m.copy(S.rifle.matrixWorld).invert();
   const wrist = B.LeftHand.getWorldPosition(new THREE.Vector3()).applyMatrix4(_m);
   const z = THREE.MathUtils.clamp(wrist.z + 0.045, 0.22, 0.37);
-  const g = leftGrip(z, 'cup');
+  // keep however far below the handguard the clip holds the hand (the aimed stances hold it low)
+  const drop = THREE.MathUtils.clamp(leftGrip(z, 'cup').pos.y - wrist.y, 0, 0.08);
+  const g = leftGrip(z, 'cup', drop);
   const tPos = g.pos.clone().applyMatrix4(S.rifle.matrixWorld);
   const rq = new THREE.Quaternion(); S.rifle.getWorldQuaternion(rq);
   const tQuatW = rq.multiply(g.quat);

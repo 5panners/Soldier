@@ -54,7 +54,7 @@ export function rightGrip() {
  * Left (support) hand under/along the handguard at distance z along the weapon.
  * style 'cup' = palm under handguard; 'clamp' = thumb-over C-clamp on the left side.
  */
-export function leftGrip(z = 0.30, style = 'cup') {
+export function leftGrip(z = 0.30, style = 'cup', drop = 0) {
   let axis, palm, contact;
   if (style === 'clamp') {
     // thumb over the top, palm on the left/bottom, fingers wrapping under to the right side
@@ -64,7 +64,7 @@ export function leftGrip(z = 0.30, style = 'cup') {
   } else {
     axis = V(-0.42, 0.10, 0.90);
     palm = V(-0.30, 1, 0);
-    contact = V(0.008, WEAPON.HANDGUARD_BOTTOM_Y - 0.002, z);
+    contact = V(0.008, WEAPON.HANDGUARD_BOTTOM_Y - 0.002 - drop, z);
   }
   const { quat, a, p } = handQuat('Left', axis, palm);
   const pos = contact.clone().addScaledVector(p, -0.017).addScaledVector(a, -0.050);
