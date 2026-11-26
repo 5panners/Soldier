@@ -31,6 +31,8 @@
   #help { position:fixed; right:12px; bottom:12px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; color:var(--mute); font-size:12px; display:none; }
   body.playing #help { display:block; }
   body.playing .viewonly { display:none; }
+  #hint { position:fixed; left:50%; bottom:130px; transform:translateX(-50%); padding:8px 14px; background:rgba(20,23,26,.88); border:1px solid #6b5c35; border-radius:8px; color:var(--fg); font-size:14px; display:none; pointer-events:none; z-index:5; }
+  #hint kbd { background:#2a2f34; border:1px solid #444; border-bottom-width:2px; border-radius:4px; padding:1px 6px; font-family:inherit; }
   #reticle { position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px; border-radius:50%; background:rgba(255,255,255,.7); display:none; pointer-events:none; }
   body.playing #reticle { display:block; }
   body.playing.eyeview #reticle { display:none; }
@@ -42,6 +44,7 @@
 <body>
 <div id="view"></div>
 <div id="reticle"></div>
+<div id="hint"></div>
 <div id="panel">
   <h1>Soldier Simulator</h1>
   <div class="sub">Flat-shaded rigged infantryman · IK-solved rifle animations</div>
@@ -73,7 +76,7 @@
 <div id="help">
   <kbd>W</kbd>/<kbd>S</kbd> forward/back · <kbd>A</kbd>/<kbd>D</kbd> strafe (+<kbd>Shift</kbd> run) · <kbd>Q</kbd>/<kbd>E</kbd> turn · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump (leaps in stride when walking/running, vaults a low wall)<br>
   <kbd>Mouse</kbd> look/turn (camera behind) · <kbd>↑ ↓</kbd> look up/down · <kbd>wheel</kbd> zoom · <kbd>G</kbd> god cam (mouse / arrows orbit all round, wheel zoom, <kbd>R</kbd><kbd>F</kbd> raise/lower focus)<br>
-  <kbd>C</kbd> crouch · <kbd>Z</kbd> prone (WASD to crawl)<br>
+  <kbd>F</kbd> climb a ladder (<kbd>W</kbd>/<kbd>S</kbd> up/down) · <kbd>C</kbd> crouch · <kbd>Z</kbd> prone (WASD to crawl)<br>
   <kbd>RMB</kbd> aim down sights on/off (hold <kbd>Shift</kbd> while aiming to move at full speed, with wide scatter) · <kbd>LMB</kbd> fire · <kbd>H</kbd> hip-fire stance<br>
   <kbd>V</kbd> eye view (through the optic when aiming) · <kbd>L</kbd> bore-sight laser · <kbd>B</kbd> bounding boxes · <kbd>Esc</kbd> back to viewer
 </div>

@@ -9,7 +9,7 @@ import { BIND_LOCAL, LEG_UPPER, LEG_LOWER, ANKLE_HEIGHT as ANKLE_HEIGHT_C } from
 import {
   STANCES, COMBAT_FEET, GRIPS, FINGERS_L, calibrate, gaitFoot, footFromPivot, footQuat, BALL_LOCAL,
   placeWeapon, rightFingers, periodicSpring, oneShotSpring, secondDerivative, periodicSmooth,
-  RECOIL_FAST, RECOIL_BODY, smooth, smoother, hermite, lerp, TAU, G, clav, footBasis, HEEL_LOCAL,
+  RECOIL_FAST, RECOIL_BODY, smooth, smoother, hermite, lerp, frac, TAU, G, clav, footBasis, HEEL_LOCAL,
 } from './motion.js';
 import { leftGrip, rightGrip } from './weapon.js';
 
@@ -673,6 +673,74 @@ function walkJumpClip(name, startPhase, upper, F = 0.58, tPush = 0.30) {
  * stay flat on the ground; each planted foot moves at exactly the strafe speed. dir = +1
  * strafes to the soldier's left (+X), -1 to his right.
  */
+/**
+ * Vertical ladder climb (the soldier faces +Z, rungs 0.3 m apart in a plane 0.42 m in front of the
+ * pelvis). Four-point climbing: the right hand and left foot move together, then the left hand and
+ * right foot; each limb is planted on a rung for 60 % of the cycle (three limbs are always in contact)
+ * and reaches two rungs up while the others hold. One cycle climbs 0.6 m; the app drives the clip by
+ * HEIGHT, not by time (time = height / 0.6 m * duration), so the hands and feet stay locked to the
+ * rungs at rungs 0.04 + 0.3 k m above the ladder base, going up or down and when stopped.
+ * The rifle is slung across the back.
+ */
+function ladderClip() {
+  const CLIMB = 0.75, CYC = 0.6, T = CYC / CLIMB, N = Math.round(T * FPS);
+  const RZ = 0.42;                          // rung plane in front of the pelvis
+  const SW = 0.4, ST = 0.6;                 // swing / stance fraction of each limb's cycle
+  const drop = CLIMB * ST * T;              // how far a planted limb slides down relative to the body
+  const limb = (u, yHi, dzLift) => {        // u: phase since the swing began
+    const yLo = yHi - drop;
+    if (u < SW) {
+      const s = u / SW;
+      return { y: hermite(yLo, -CLIMB, yHi, -CLIMB, SW * T, s), dz: -dzLift * Math.sin(Math.PI * s), swing: s };
+    }
+    return { y: yHi - CLIMB * (u - SW) * T, dz: 0, swing: -1 };
+  };
+  const handQ = (side) => { // palm toward the ladder, fingers up, over the rung
+    const a = V3(0, 1, 0), p = V3(0, 0, 1);
+    const m = new THREE.Matrix4();
+    if (side === 'Left') m.makeBasis(a, p.clone().negate(), V3().crossVectors(p, a));
+    else m.makeBasis(a.clone().negate(), p.clone().negate(), V3().crossVectors(a, p));
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+  };
+  const HQ = { Left: handQ('Left'), Right: handQ('Right') };
+  const frames = [];
+  for (let n = 0; n < N; n++) {
+    const phi = n / N;
+    // pair A: right hand + left foot (swing from phase 0); pair B: left hand + right foot (from 0.5)
+    const uA = frac(phi), uB = frac(phi + 0.5);
+    const hand = { Right: limb(uA, 1.55, 0.05), Left: limb(uB, 1.55, 0.05) };
+    const foot = { Left: limb(uA, 0.40, 0.10), Right: limb(uB, 0.40, 0.10) };
+    const hipsQ = qEuler(deg(11), deg(3.5) * Math.sin(TAU * phi), deg(2.2) * Math.sin(TAU * phi));
+    const hipsPos = V3(0.012 * Math.sin(TAU * phi), 0.875 + 0.006 * Math.cos(2 * TAU * phi), -0.03);
+    const chestQ = qEuler(deg(15), deg(-5) * Math.sin(TAU * phi), deg(-2.5) * Math.sin(TAU * phi));
+    const feet = {};
+    for (const [sd, sx] of [['Left', 1], ['Right', -1]]) {
+      const f = foot[sd], pitch = deg(24);
+      const ff = footFromPivot(V3(sx * 0.12, f.y, RZ + f.dz), BALL_LOCAL, pitch, 0);
+      feet[sd] = { pos: ff.pos, quat: ff.quat, toe: deg(20) };
+    }
+    const handT = (sd, sx) => ({ pos: V3(sx * 0.205, hand[sd].y, RZ - 0.017 + hand[sd].dz), quat: HQ[sd] });
+    const grip = (sd) => (hand[sd].swing >= 0 ? 0.55 : 1.0); // fingers open while reaching, closed on the rung
+    const curl = (c) => ({ index: [0.9 * c, 1.1 * c, 0.7 * c], middle: [1.0 * c, 1.25 * c, 0.8 * c], thumb: [0.45 * c, 0.5 * c, 0.4 * c], thumbOpp: 0.6 });
+    frames.push({
+      hips: { pos: hipsPos, quat: hipsQ }, chest: chestQ, spineDist: [0.27, 0.34, 0.39],
+      head: qEuler(deg(-16), deg(-2) * Math.sin(TAU * phi), 0),
+      clavicle: { Left: qEuler(0, 0, deg(6)), Right: qEuler(0, 0, deg(-6)) },
+      feet, kneePole: { Left: V3(0.35, 0.1, 1).normalize(), Right: V3(-0.35, 0.1, 1).normalize() },
+      weapon: (ctx) => {
+        const c = ctx.W.Spine2;
+        const q = c.quat.clone().multiply(qEuler(deg(-90), deg(-10), 0));
+        return { pos: V3(0.1, -0.32, -0.36).applyQuaternion(c.quat).add(c.pos), quat: q };
+      },
+      freeHand: { Left: () => handT('Left', 1), Right: () => handT('Right', -1) },
+      elbowPole: { Left: V3(0.55, -0.9, -0.25).normalize(), Right: V3(-0.55, -0.9, -0.25).normalize() },
+      fingers: { Left: curl(grip('Left')), Right: curl(grip('Right')) },
+    });
+  }
+  frames.push(frames[0]);
+  return { name: 'Ladder_Climb', duration: T, loop: true, speed: 0, frames, climb: CLIMB, climbCycle: CYC };
+}
+
 function strafeClip(name, dir, upper, o = {}) {
   const T = o.T ?? 0.86, L = o.L ?? 0.60, s = 0.60, v = L / T;
   // planted x ranges (for dir = +1): lead foot from a down to a - s*L, trail foot from b down;
@@ -1003,6 +1071,7 @@ export function buildClipLibrary() {
   });
   clips.push(locomotion('Run', GAITS.run, RUN_UPPER));
   // running jumps out of the run cycle (take-off on the right or the left foot)
+  clips.push(ladderClip());
   clips.push(runJumpClip('Run_Jump', 0.0, RUN_UPPER));
   clips.push(runJumpClip('Run_Jump_Left', 0.5, RUN_UPPER));
 

@@ -28,6 +28,14 @@ if (def.obstacle) { // show the obstacle a vault clip was authored against
   const wall = new THREE.Mesh(new THREE.BoxGeometry(1.6, o.wallHeight, o.wallThickness), new THREE.MeshStandardMaterial({ color: '#8a8478', flatShading: true }));
   wall.position.set(0, o.wallHeight / 2, o.wallFront + o.wallThickness / 2); wall.castShadow = wall.receiveShadow = true; scene.add(wall);
 }
+let ladder = null;
+if (def.climb) { // show the ladder the climb clip is authored against (rungs 0.04 + 0.3 k m above the base at t = 0)
+  ladder = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: '#5d6468', flatShading: true });
+  for (const sx of [-0.27, 0.27]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, 6, 0.06), steel); r.position.set(sx, 2, 0.45); ladder.add(r); }
+  for (let k = -4; k < 16; k++) { const g = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.54, 6), steel); g.rotation.z = Math.PI / 2; g.position.set(0, 0.04 + 0.3 * k, 0.45); ladder.add(g); }
+  scene.add(ladder);
+}
 const mixer = new THREE.AnimationMixer(S.group); const act = mixer.clipAction(clip); act.play();
 const cams = { side: [[-3.0, 1.0, 0.25], [0, 0.95, 0.25]], front: [[0, 1.1, 3.2], [0, 0.95, 0]], three: [[-2.1, 1.4, 2.2], [0, 1.0, 0.15]],
   upper: [[-1.6, 1.5, 0.9], [0, 1.3, 0.3]], handL: [[1.5, 1.33, 0.50], [0.10, 1.37, 0.50]], handL2: [[0.2, 0.9, 1.9], [0.10, 1.35, 0.50]], handLu: [[0.5, 1.9, 0.5], [0.1, 1.38, 0.5]], handR: [[-1.5, 1.30, 0.12], [-0.15, 1.36, 0.0]], handR2: [[-0.9, 0.9, 1.4], [-0.15, 1.36, 0.05]], boots: [[-0.9, 0.35, 0.7], [0, 0.07, 0.1]], bootSide: [[-1.2, 0.12, 0.1], [0, 0.1, 0.1]], bootsTop: [[0.0, 1.1, 0.7], [0, 0.05, 0.1]], gripR: [[-2.0, 1.42, 0.35], [0, 1.38, 0.35]], gripL: [[2.0, 1.42, 0.35], [0, 1.38, 0.35]], gripLow: [[1.2, 0.7, 0.35], [0, 1.35, 0.35]], left: [[3.0, 1.0, 0.25], [0, 0.95, 0.25]], feet: [[-1.6, 0.4, 0.4], [0, 0.25, 0.1]],
@@ -41,6 +49,7 @@ const span = Number(P.get('span') || 1);
 for (let i = 0; i < n; i++) {
   const t = (i / (def.loop ? n : Math.max(1, n - 1))) * def.duration * span;
   act.time = Math.min(t, def.duration); mixer.update(0);
+  if (ladder) ladder.position.y = -(def.climb * t) % 0.6 - 0.0;
   grid.position.z = def.strafe ? 0 : -(speed * t) % 0.25; // ground motion for in-place clips
   grid.position.x = def.strafe ? -(def.strafe === 'left' ? 1 : -1) * (speed * t) % 0.25 : 0;
   const x = (i % cols) * cw, y = (rows - 1 - Math.floor(i / cols)) * ch;

@@ -90,6 +90,13 @@
     "shots": [],
     "events": {}
   },
+  "Ladder_Climb": {
+    "duration": 0.8,
+    "loop": true,
+    "inPlaceSpeed": 0,
+    "shots": [],
+    "events": {}
+  },
   "Run_Jump": {
     "duration": 1.225,
     "loop": false,

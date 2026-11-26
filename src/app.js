@@ -62,6 +62,8 @@ scene.add(ground);
 // ------------------------------------------------------------------ test course (play mode)
 // Stairs, ramps, a steep slope and a patch of uneven ground, west of the spawn point.
 // groundH(x, z) is the walkable height everywhere; foot IK and the character root use it.
+// jump park: low platforms and rocks to jump onto, east of the spawn point
+function inPark(x, z) { return (x > 7.5 && x < 24 && z > -5.5 && z < 14) || (x > 26 && x < 47 && z > 3 && z < 32); }
 function inCourse(x, z) { return x > -42 && x < -13 && z > -8 && z < 28; }
 const TAN15 = Math.tan((15 * Math.PI) / 180), TAN25 = Math.tan((25 * Math.PI) / 180);
 function roughH(x, z) {
@@ -70,8 +72,11 @@ function roughH(x, z) {
   const n = Math.sin(x * 1.7) * Math.cos(z * 1.3) * 0.6 + Math.sin(x * 0.6 + z * 0.8 + 1) * 0.4;
   return 0.35 * (0.5 + 0.5 * n) * Math.max(0, edge);
 }
-function groundH(x, z) {
-  let h = roughH(x, z);
+/** Height of the floor the soldier at height `ref` would stand on at (x, z): the highest solid surface
+ *  not more than a step above him (so a slab overhead, or the second floor of a building, is ignored
+ *  from below, and is walked on from above). */
+function groundH(x, z, ref = S.group.position.y + (sim.rise || 0)) {
+  let h = Math.max(roughH(x, z), propH(x, z, ref));
   // A: 15 deg ramp up -> platform -> stairs down (x -22..-18)
   if (x >= -22 && x <= -18) {
     if (z >= 0 && z < 5.6) h = Math.max(h, z * TAN15);
@@ -131,7 +136,7 @@ const props = new THREE.Group();
   let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 70; i++) {
     const r = 6 + rnd() * 40, a = rnd() * Math.PI * 2;
-    if (inCourse(Math.cos(a) * r, Math.sin(a) * r)) { rnd(); rnd(); continue; } // keep the test course clear
+    if (inCourse(Math.cos(a) * r, Math.sin(a) * r) || inPark(Math.cos(a) * r, Math.sin(a) * r)) { rnd(); rnd(); continue; } // keep the test course and the jump park clear
     const m = i % 3 === 0
       ? new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), crate)
       : new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + rnd() * 0.7, 0), mat);
@@ -139,6 +144,25 @@ const props = new THREE.Group();
     m.rotation.y = rnd() * 6;
     m.castShadow = m.receiveShadow = true;
     props.add(m);
+  }
+  // jump park: stepping platforms (0.25 m can be stepped onto; 0.5 - 0.8 m need a jump, 0.95 m a
+  // running jump) and rocks of different heights. Everything is solid and can be stood on.
+  {
+    const slab = (h) => new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.1, 0.06, 0.42 + h * 0.2), flatShading: true, roughness: 0.95 });
+    for (const [x, z, w, d, h] of [
+      [10, 2, 2.5, 2.5, 0.25], [13, 2, 2.5, 2.5, 0.5], [16, 2, 2.5, 2.5, 0.65], [19, 2, 2.5, 2.5, 0.8],
+      [10, 7, 3, 3, 0.5], [14.5, 7, 2, 2, 0.7], [18, 7, 2, 2, 0.95], [21.5, 7, 2.5, 2.5, 0.6],
+      [15, -2.5, 6, 2, 0.4], [21, -2.5, 3, 2, 0.8],
+    ]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), slab(h));
+      m.position.set(x, h / 2, z); m.castShadow = m.receiveShadow = true; props.add(m);
+    }
+    const rockMat = new THREE.MeshStandardMaterial({ color: '#8f8b7c', flatShading: true, roughness: 1 });
+    for (const [x, z, R, top] of [[10.5, 11.5, 0.7, 0.55], [13.5, 11.5, 0.9, 0.75], [16.5, 11.5, 0.8, 0.6], [19.5, 11.5, 1.0, 0.85], [22.5, 11.5, 0.75, 0.5]]) {
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(R, 0), rockMat);
+      m.position.set(x, top - 0.9 * R, z); m.rotation.y = x; // top vertex pair sits at about 0.93 R above the centre
+      m.castShadow = m.receiveShadow = true; props.add(m);
+    }
   }
   // range targets downrange
   const tmat = new THREE.MeshStandardMaterial({ color: '#d8d2bf', flatShading: true });
@@ -182,10 +206,10 @@ const COLLIDERS = [];
   for (const o of props.children) {
     if (o.isMesh && o.geometry.type === 'BoxGeometry') {
       const q = o.geometry.parameters;
-      COLLIDERS.push({ type: 'box', x: o.position.x, z: o.position.z, hx: q.width / 2, hz: q.depth / 2, yaw: o.rotation.y, top: o.position.y + q.height / 2 });
+      COLLIDERS.push({ type: 'box', x: o.position.x, z: o.position.z, hx: q.width / 2, hz: q.depth / 2, yaw: o.rotation.y, top: o.position.y + q.height / 2, bot: o.position.y - q.height / 2 });
     } else if (o.isMesh && o.geometry.type === 'DodecahedronGeometry') {
       const r = o.geometry.parameters.radius;
-      COLLIDERS.push({ type: 'circle', x: o.position.x, z: o.position.z, r: r * 0.92, top: o.position.y + r });
+      COLLIDERS.push({ type: 'circle', x: o.position.x, z: o.position.z, r: r * 0.92, top: o.position.y + r, base: o.position.y, R: r });
     } else if (o.isGroup) {
       const w = WALLS.find((wl) => wl.g === o);
       if (w) COLLIDERS.push({ type: 'box', x: w.x, z: w.z, hx: w.half + 0.02, hz: 0.145, yaw: w.yaw, top: 1.0 });
@@ -193,25 +217,120 @@ const COLLIDERS = [];
     }
   }
 }
+// ------------------------------------------------------------------ structures: building and ladder tower
+// A two-storey building (door, an internal staircase up to the second floor, ribbon windows) and a
+// 10 m tower with a vertical ladder, north-east of the spawn point. Every solid is a collider, and
+// floors are walkable surfaces at their own heights (groundH picks the one at the soldier's level).
+const structures = new THREE.Group(); scene.add(structures);
+const LADDERS = [];
+function addSolid(x0, x1, y0, y1, z0, z1, mat, walk = false) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat);
+  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
+  structures.add(m);
+  COLLIDERS.push({ type: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, yaw: 0, top: y1, bot: y0, walk });
+  return m;
+}
+{
+  const wall = new THREE.MeshStandardMaterial({ color: '#a39d90', flatShading: true, roughness: 0.95 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#7f796f', flatShading: true, roughness: 0.95 });
+  const floor = new THREE.MeshStandardMaterial({ color: '#8a7a5c', flatShading: true, roughness: 0.9 });
+  const steel = new THREE.MeshStandardMaterial({ color: '#5d6468', flatShading: true, roughness: 0.6, metalness: 0.3 });
+  // building: inner room x 31..39, z 8..14; floors at 0 and 3.0 m; roof at 6.0 m
+  const X0 = 31, X1 = 39, Z0 = 8, Z1 = 14, T = 0.25, H2 = 3.0, HR = 6.0;
+  // south wall with a door (x 32.3 .. 33.7, 2.2 m high)
+  addSolid(X0 - T, 32.3, 0, HR, Z0 - T, Z0, wall); addSolid(33.7, X1 + T, 0, HR, Z0 - T, Z0, wall);
+  addSolid(32.3, 33.7, 2.2, HR, Z0 - T, Z0, dark);
+  // north, west and east walls: solid to 3.9 m, then a ribbon window (3.9 - 5.1 m), then a top band
+  for (const [a0, a1, b0, b1] of [[X0 - T, X1 + T, Z1, Z1 + T], [X0 - T, X0, Z0, Z1], [X1, X1 + T, Z0, Z1]]) {
+    addSolid(a0, a1, 0, 3.9, b0, b1, wall); addSolid(a0, a1, 5.1, HR, b0, b1, wall);
+  }
+  // corner posts through the window band, and the roof slab
+  for (const [cx, cz] of [[X0 - T, Z0 - T], [X1, Z0 - T], [X0 - T, Z1], [X1, Z1]]) addSolid(cx, cx + T, 3.9, 5.1, cz, cz + T, dark);
+  addSolid(X0 - T - 0.2, X1 + T + 0.2, HR, HR + 0.25, Z0 - T - 0.2, Z1 + T + 0.2, dark);
+  // second floor with a stairwell opening over the stairs (x 37.1 .. 38.9, z 8.8 .. 12.5, so there is headroom all the way up the flight)
+  addSolid(X0, 37.1, H2 - 0.2, H2, Z0, Z1, floor);
+  addSolid(37.1, X1, H2 - 0.2, H2, Z0, 8.8, floor);
+  addSolid(37.1, X1, H2 - 0.2, H2, 12.5, Z1, floor);
+  // internal staircase along the east wall: 15 treads, 0.2 m rise x 0.28 m run, 1.4 m wide
+  // (treads are walkable surfaces without a collision wall of their own, like the test course stairs;
+  // a stringer wall keeps him on the flight)
+  for (let i = 0; i < 15; i++) addSolid(37.4, 38.8, 0, (i + 1) * 0.2, Z0 + 0.4 + i * 0.28, Z0 + 0.4 + (i + 1) * 0.28, i % 2 ? dark : wall, true);
+  addSolid(37.1, 37.4, 0, 3.0, Z0 + 0.4, Z0 + 0.4 + 15 * 0.28, dark);
+  // tower: four legs and a 4 x 4 m platform whose top is 10 m up, centre (42, 24)
+  const TX = 42, TZ = 24, TH = 10.0;
+  for (const sx of [-1.7, 1.7]) for (const sz of [-1.7, 1.7]) addSolid(TX + sx - 0.15, TX + sx + 0.15, 0, TH - 0.3, TZ + sz - 0.15, TZ + sz + 0.15, steel);
+  addSolid(TX - 2, TX + 2, TH - 0.3, TH, TZ - 2, TZ + 2, floor);
+  // low parapet on the three sides without the ladder (visual and solid)
+  addSolid(TX - 2, TX + 2, TH, TH + 1.0, TZ + 1.9, TZ + 2, steel);
+  addSolid(TX - 2, TX - 1.9, TH, TH + 1.0, TZ - 2, TZ + 1.9, steel); addSolid(TX + 1.9, TX + 2, TH, TH + 1.0, TZ - 2, TZ + 1.9, steel);
+  // cross braces (visual only)
+  for (const sz of [-1.7, 1.7]) for (const [y0, y1] of [[0.4, 4.4], [4.4, 8.4]]) {
+    for (const dir of [1, -1]) {
+      const len = Math.hypot(3.4, y1 - y0);
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, len, 0.08), steel);
+      b.position.set(TX, (y0 + y1) / 2, TZ + sz); b.rotation.z = dir * Math.atan2(3.4, y1 - y0);
+      structures.add(b);
+    }
+  }
+  // the ladder on the south face (soldier faces +z): rails and rungs every 0.3 m, rungs at 0.04 + 0.3 k
+  const LZ = TZ - 2 - 0.12, LX = TX, LBASE = 0;
+  for (const sx of [-0.27, 0.27]) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, TH + 1.1, 0.06), steel); r.position.set(LX + sx, (TH + 1.1) / 2, LZ); structures.add(r);
+  }
+  for (let k = 0; LBASE + 0.04 + 0.3 * k < TH + 0.9; k++) {
+    const rg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.54, 6), steel);
+    rg.rotation.z = Math.PI / 2; rg.position.set(LX, LBASE + 0.04 + 0.3 * k, LZ); structures.add(rg);
+  }
+  // standoff brackets to the platform edge
+  for (const y of [1.5, 4, 6.5, 9.2]) for (const sx of [-0.27, 0.27]) {
+    const br = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.12), steel); br.position.set(LX + sx, y, LZ + 0.06); structures.add(br);
+  }
+  LADDERS.push({ x: LX, rungZ: LZ, base: LBASE, top: TH, hipZ: LZ - 0.42, platformZ: TZ - 2 + 0.9 });
+}
 const colliderViz = new THREE.Group(); colliderViz.visible = false; scene.add(colliderViz);
 {
   const lm = new THREE.LineBasicMaterial({ color: '#ff5a36' });
   for (const c of COLLIDERS) {
     let geo;
-    if (c.type === 'box') geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(c.hx * 2, c.top, c.hz * 2));
+    const b0 = c.bot || 0;
+    if (c.type === 'box') geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(c.hx * 2, c.top - b0, c.hz * 2));
     else geo = new THREE.EdgesGeometry(new THREE.CylinderGeometry(c.r, c.r, c.top, 12));
     const l = new THREE.LineSegments(geo, lm);
-    l.position.set(c.x, c.top / 2, c.z); l.rotation.y = c.type === 'box' ? c.yaw : 0;
+    l.position.set(c.x, (c.top + b0) / 2, c.z); l.rotation.y = c.type === 'box' ? c.yaw : 0;
     colliderViz.add(l);
   }
 }
 const BODY_R = 0.32, STEP_MAX = 0.45;
+/** Height of the solid prop surface under (x, z), 0 if none: box tops, and a dome over each rock. */
+function propH(x, z, ref = 0) {
+  let h = 0;
+  const lim = ref + STEP_MAX + 0.02;
+  for (const c of COLLIDERS) {
+    if (c.type !== 'circle' && c.top > lim) continue; // too high to stand on from here
+    const dx = x - c.x, dz = z - c.z;
+    if (c.type === 'circle') {
+      if (c.r < 0.1) continue; // target posts are not something to stand on
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= c.r * c.r) continue;
+      { const hh = c.base + 0.9 * c.R * Math.sqrt(1 - d2 / (c.r * c.r)); if (hh <= lim) h = Math.max(h, hh); }
+    } else {
+      if (dx * dx + dz * dz > (c.hx + c.hz) * (c.hx + c.hz)) continue;
+      const cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
+      const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
+      if (Math.abs(lx) <= c.hx && Math.abs(lz) <= c.hz) h = Math.max(h, c.top);
+    }
+  }
+  return h;
+}
 function collide(p) {
   for (let it = 0; it < 3; it++) {
     for (const c of COLLIDERS) {
+      if (c.walk) continue;
       const dx = p.x - c.x, dz = p.z - c.z;
       if (dx * dx + dz * dz > 25) continue;
-      if (c.top - p.y < STEP_MAX * 0.6) continue; // low enough to step over
+      const feet = p.y + (sim.rise || 0);
+      if (c.top - feet < STEP_MAX * 0.6) continue; // low enough to step over, or the feet are above it
+      if (c.bot && feet + 1.8 <= c.bot) continue; // a slab or lintel overhead: walk underneath
       if (c.type === 'circle') {
         const d = Math.hypot(dx, dz), m = c.r + BODY_R;
         if (d < m && d > 1e-6) { p.x = c.x + (dx / d) * m; p.z = c.z + (dz / d) * m; }
@@ -436,7 +555,7 @@ const raycaster = new THREE.Raycaster();
 let lastShot = null;
 function castRay(origin, dir, far = 400) {
   raycaster.set(origin, dir); raycaster.far = far;
-  const h = raycaster.intersectObjects([ground, props, course], true)[0];
+  const h = raycaster.intersectObjects([ground, props, course, structures], true)[0];
   return h ? { point: h.point, distance: h.distance, object: h.object, normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0) }
     : { point: origin.clone().addScaledVector(dir, far), distance: far, object: null };
 }
@@ -589,7 +708,7 @@ let ikFix = true;
 let groundScroll = 0, groundScrollX = 0;
 let lastClipTime = 0;
 const GROUPS = [
-  ['Locomotion', ['Idle', 'Walk', 'Run', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk', 'HipFire_Run', 'ADS_Run']],
+  ['Locomotion', ['Idle', 'Walk', 'Run', 'Ladder_Climb', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk', 'HipFire_Run', 'ADS_Run']],
   ['Weapon', ['ADS_Idle', 'HipFire_Idle', 'ADS_Fire', 'ADS_Fire_Auto', 'HipFire_Fire', 'HipFire_Fire_Auto']],
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
@@ -665,7 +784,7 @@ function setMode(m) {
   $('#modeview').classList.toggle('on', m === 'view');
   controls.enabled = m === 'view';
   if (m === 'play') {
-    sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
+    sim.rig = null; sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
     sim.god = false; sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.falling = false; sim.vy = 0;
     viewerWall.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
@@ -698,6 +817,12 @@ window.addEventListener('keydown', (e) => {
   if (mode !== 'play') return;
   if (['Space', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault(); // no UI buttons / page scroll
   if (e.repeat) return;
+  if (e.code === 'KeyF' && !sim.god) {
+    if (sim.ladder) { if (!sim.ladder.move) letGoLadder(false); }
+    else { const n = nearLadder(); if (n) mountLadder(n); }
+    return;
+  }
+  if (sim.ladder) { if (e.code === 'Space' && !sim.ladder.move) letGoLadder(true); return; }
   if (e.code === 'Space' && !sim.jumping && !sim.vault && (sim.posture || 'stand') === 'stand' && !sim.postureClip) {
     const v = vaultableWall();
     if (v) startVault(v);
@@ -750,7 +875,7 @@ window.addEventListener('mousemove', (e) => {
     return;
   }
   // shooter-style mouse look: X turns the soldier (camera locked behind him), Y tilts the view
-  if (!sim.vault && !sim.postureClip) sim.yaw -= e.movementX * 0.0022 * (sim.aim === 'ads' || sim.eye ? 0.55 : 1) * ((sim.posture || 'stand') === 'prone' ? 0.5 : 1);
+  if (!sim.vault && !sim.postureClip && !sim.ladder) sim.yaw -= e.movementX * 0.0022 * (sim.aim === 'ads' || sim.eye ? 0.55 : 1) * ((sim.posture || 'stand') === 'prone' ? 0.5 : 1);
   sim.camPitch = THREE.MathUtils.clamp(sim.camPitch + e.movementY * 0.002, -0.3, 0.6);
 });
 
@@ -817,6 +942,15 @@ function followGround(dt) {
   const near = (h) => (Math.abs(h - c) <= STEP_MAX ? h : c);
   const g = (c * 2 + near(groundH(p.x + f.x * 0.2, p.z + f.z * 0.2)) + near(groundH(p.x - f.x * 0.2, p.z - f.z * 0.2))) / 4;
   const gMax = Math.max(c, g);
+  // airborne (a jump or leap): the clip lifts the pelvis; the root stays put, but the feet may
+  // not sink into a surface, so the root rises onto any platform or rock they come down on
+  const rise = sim.jumping && S.bones.Hips ? S.bones.Hips.position.y - (sim.pelvisDrop || 0) - 0.93 : 0;
+  sim.rise = Math.max(0, rise);
+  if (sim.jumping && rise > 0.03 && !sim.falling) {
+    p.y = Math.max(p.y, c - rise);
+    sim.vy = 0;
+    return;
+  }
   if (p.y - gMax > 0.5 || sim.falling) {
     sim.falling = true; sim.vy = (sim.vy || 0) - 9.81 * dt; p.y += sim.vy * dt;
     if (p.y <= g) { p.y = g; sim.vy = 0; sim.falling = false; }
@@ -825,6 +959,28 @@ function followGround(dt) {
 
 function startJump() {
   sim.jumping = true;
+  // ledge assist: a standing jump (which is on the spot) at a platform or rock that is within
+  // reach carries him up onto it during the flight
+  sim.hop = null;
+  {
+    const P = S.group.position, f = new THREE.Vector3(Math.sin(sim.yaw), 0, Math.cos(sim.yaw));
+    const here = groundH(P.x, P.z), reachRef = here + 0.9; // probe with the height a jump can reach
+    const gh = (d) => groundH(P.x + f.x * d, P.z + f.z * d, reachRef);
+    for (let d = 0.4; d <= 1.1; d += 0.1) {
+      const h = gh(d);
+      if (h - here > STEP_MAX * 0.6 && h - here <= 0.85) {
+        // land on the highest point just beyond the edge (the middle of a slab, the crown of a rock)
+        let best = null;
+        for (let r = d; r <= d + 1.0; r += 0.05) {
+          const hr = gh(r);
+          if (hr - here > 0.85) break;
+          if (!best || hr > best.h + 0.03 || (hr > best.h - 0.03 && Math.abs(r - (d + 0.5)) < Math.abs(best.r - (d + 0.5)))) best = { r, h: hr };
+        }
+        sim.hop = { x1: P.x + f.x * best.r, z1: P.z + f.z * best.r, t: -1 };
+        break;
+      }
+    }
+  }
   const a = actions.Jump;
   a.reset(); a.setEffectiveWeight(1); a.setEffectiveTimeScale(1); a.play();
   (sim.base ? actions[sim.base] : current).crossFadeTo(a, 0.06, false);
@@ -858,7 +1014,72 @@ const POSTURE_T = {
   'stand>prone': 'Stand_To_Prone', 'prone>stand': 'Prone_To_Stand',
   'crouch>prone': 'Stand_To_Prone', 'prone>crouch': 'Prone_To_Stand',
 };
+// ------------------------------------------------------------------ ladders
+// F next to a ladder grabs it (from the bottom facing it, or from the platform edge facing out);
+// W / S climb up and down (the climb clip is driven by HEIGHT, so hands and feet stay on the rungs),
+// at the top W steps onto the platform, at the bottom S steps off, F lets go, Space jumps off.
+function nearLadder() {
+  if ((sim.posture || 'stand') !== 'stand' || sim.jumping || sim.vault || sim.falling || sim.postureClip) return null;
+  const P = S.group.position, fz = Math.cos(sim.yaw);
+  for (const L of LADDERS) {
+    if (Math.abs(P.x - L.x) > 0.6) continue;
+    if (Math.abs(P.y - L.base) < 0.35 && P.z > L.hipZ - 1.2 && P.z < L.hipZ + 0.3 && fz > 0.5) return { L, top: false };
+    if (Math.abs(P.y - L.top) < 0.35 && P.z > L.rungZ + 0.15 && P.z < L.rungZ + 1.9 && fz < -0.5) return { L, top: true };
+  }
+  return null;
+}
+function mountLadder(n) {
+  const L = n.L, yTop = L.top - L.base - 0.25;
+  sim.ladder = { L, yc: n.top ? yTop : 0, move: { t: 0, dur: n.top ? 0.9 : 0.35, from: S.group.position.clone(), to: new THREE.Vector3(L.x, L.base + (n.top ? yTop : 0), L.hipZ), after: 'climb', hop: false } };
+  sim.aim = 'none'; sim.fire = false; sim.speed = 0; sim.pendingLeap = null; sim.eye = false;
+  sim.yaw = 0; sim.lowerYaw = 0; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.hop = null;
+  setBase('Ladder_Climb', 0.25, 0);
+}
+function letGoLadder(jump) {
+  if (!sim.ladder) return;
+  sim.ladder = null; sim.falling = true; sim.vy = jump ? 1.2 : 0;
+  if (jump) S.group.position.z -= 0.45; // push off backwards
+  setBase('Idle', 0.2);
+}
+function updateLadder(dt) {
+  const ld = sim.ladder, L = ld.L, a = actions.Ladder_Climb, D = DEFS.Ladder_Climb;
+  const dur = a.getClip().duration, yTop = L.top - L.base - 0.25;
+  const pose = () => { a.time = ((ld.yc / D.climbCycle) % 1) * dur; a.setEffectiveTimeScale(0); };
+  sim.speed = 0; sim.fire = false;
+  if (ld.move) { // grabbing the ladder, or stepping off it
+    const m = ld.move; m.t += dt;
+    const k = Math.min(1, m.t / m.dur), e = k * k * (3 - 2 * k);
+    S.group.position.set(m.from.x + (m.to.x - m.from.x) * e, m.from.y + (m.to.y - m.from.y) * e + (m.hop ? 0.3 * Math.sin(Math.PI * k) : 0), m.from.z + (m.to.z - m.from.z) * e);
+    if (m.after === 'climb') pose();
+    if (k >= 1) { if (m.after === 'free') sim.ladder = null; else ld.move = null; }
+    return;
+  }
+  const v = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
+  ld.yc = Math.max(0, ld.yc + v * D.climb * dt);
+  if (v > 0 && ld.yc >= yTop) { // over the top: step onto the platform
+    ld.yc = yTop; pose();
+    ld.move = { t: 0, dur: 1.0, from: S.group.position.clone(), to: new THREE.Vector3(L.x, L.top, L.platformZ), after: 'free', hop: true };
+    setBase('Idle', 0.4); return;
+  }
+  if (v < 0 && ld.yc <= 0) { // back at the bottom: step off
+    ld.move = { t: 0, dur: 0.5, from: S.group.position.clone(), to: new THREE.Vector3(L.x, L.base, L.hipZ - 0.8), after: 'free', hop: false };
+    setBase('Idle', 0.3); return;
+  }
+  S.group.position.set(L.x, L.base + ld.yc, L.hipZ);
+  pose();
+}
+function updateHint() {
+  const el = $('#hint'); if (!el) return;
+  let msg = '';
+  if (mode === 'play') {
+    if (sim.ladder) msg = sim.ladder.move ? '' : '<kbd>W</kbd> / <kbd>S</kbd> climb · <kbd>F</kbd> let go · <kbd>Space</kbd> jump off';
+    else { const n = nearLadder(); if (n) msg = n.top ? '<kbd>F</kbd> climb down the ladder' : '<kbd>F</kbd> climb the ladder'; }
+  }
+  if (el.dataset.m !== msg) { el.dataset.m = msg; el.innerHTML = msg; el.style.display = msg ? 'block' : 'none'; }
+}
+
 function updatePlay(dt) {
+  if (sim.ladder) { updateLadder(dt); return; }
   if (sim.vault) { updateVault(dt); return; }
   // queued walking/running leap: start it exactly at the next heel strike so the stride lines up
   if (sim.pendingLeap) {
@@ -1007,6 +1228,17 @@ function updatePlay(dt) {
   S.group.position.x += Math.sin(dirYaw) * sim.speed * dt;
   S.group.position.z += Math.cos(dirYaw) * sim.speed * dt;
   collide(S.group.position);
+  if (sim.hop) { // carried onto the ledge while the feet are off the ground
+    const hp = sim.hop;
+    if (hp.t < 0 && sim.rise > 0.25) { hp.t = 0; hp.x0 = S.group.position.x; hp.z0 = S.group.position.z; }
+    if (hp.t >= 0) {
+      hp.t += dt;
+      const k = Math.min(1, hp.t / 0.55), e = k * k * (3 - 2 * k);
+      S.group.position.x = hp.x0 + (hp.x1 - hp.x0) * e; S.group.position.z = hp.z0 + (hp.z1 - hp.z0) * e;
+      if (k >= 1) sim.hop = null;
+    }
+    if (!sim.jumping) sim.hop = null;
+  }
   // ledges taller than a step block him (slide along them on the free axis)
   const gNow = groundH(prevPos.x, prevPos.z);
   if (groundH(S.group.position.x, S.group.position.z) - gNow > STEP_MAX && !sim.jumping) {
@@ -1140,13 +1372,24 @@ function updatePlayCamera(dt) {
   }
   const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'HipFire_Run' || sim.base === 'ADS_Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
   camera.fov += (fovWant - camera.fov) * Math.min(1, dt * 6); camera.near = 0.02; camera.updateProjectionMatrix();
-  const dist = (sim.aim === 'ads' ? 2.1 : 2.6) * (sim.zoom || 1); // mouse wheel scales the orbit radius
-  const side = sim.aim === 'ads' ? -0.75 : -0.55;
-  const ph = { stand: sim.aim === 'ads' ? 1.6 : 1.55, crouch: 1.15, prone: 0.75 }[sim.posture || 'stand'];
+  // camera rig parameters ease toward their targets (switching aim, posture or zoom would otherwise
+  // snap the pivot and the look-at point and jolt the view)
+  const tgt = { dist: (sim.aim === 'ads' ? 2.1 : 2.6) * (sim.zoom || 1), side: sim.aim === 'ads' ? -0.75 : -0.55,
+    ph: { stand: sim.aim === 'ads' ? 1.6 : 1.55, crouch: 1.15, prone: 0.75 }[sim.posture || 'stand'] };
+  if (!sim.rig) sim.rig = { ...tgt };
+  const kr = 1 - Math.exp(-dt * 7);
+  for (const k of ['dist', 'side', 'ph']) sim.rig[k] += (tgt[k] - sim.rig[k]) * kr;
+  const { dist, side, ph } = sim.rig;
   const pivot = S.group.position.clone().add(new THREE.Vector3(0, ph, 0));
   const fwd = new THREE.Vector3(Math.sin(sim.camYaw), 0, Math.cos(sim.camYaw));
   const right = new THREE.Vector3(-fwd.z, 0, fwd.x).negate();
   const want = pivot.clone().addScaledVector(fwd, -dist * Math.cos(sim.camPitch)).addScaledVector(right, side).add(new THREE.Vector3(0, dist * Math.sin(sim.camPitch), 0));
+  { // keep the camera out of walls and ceilings: pull it in along the line from the pivot
+    const to = want.clone().sub(pivot), dist = to.length();
+    raycaster.set(pivot, to.clone().divideScalar(dist)); raycaster.far = dist;
+    const hit = raycaster.intersectObjects([props, course, structures], true)[0];
+    if (hit) want.copy(pivot).addScaledVector(to.divideScalar(dist), Math.max(0.35, hit.distance - 0.25));
+  }
   camera.position.lerp(want, 1 - Math.exp(-dt * 14));
   camera.lookAt(pivot.clone().addScaledVector(fwd, 6).addScaledVector(right, side * 0.5).add(new THREE.Vector3(0, -0.3 - 6 * Math.sin(sim.camPitch) * 0.5, 0)));
 }
@@ -1169,7 +1412,7 @@ function frame() {
     updatePlay(dt);
     mixer.update(dt);
     applyLowerBodyYaw();
-    if (!sim.vault && !sim.falling && (sim.posture || 'stand') !== 'prone') footIK(dt);
+    if (!sim.vault && !sim.ladder && !sim.falling && (sim.posture || 'stand') !== 'prone') footIK(dt);
     else if (sim.falling) sim.pelvisDrop = 0;
     // chase camera: locked behind the soldier (eases only while a vault re-aligns him)
     sim.camYaw = sim.vault ? sim.camYaw + wrapAngle(sim.yaw - sim.camYaw) * Math.min(1, dt * 8) : sim.yaw;
@@ -1181,8 +1424,9 @@ function frame() {
   } else if (!paused) {
     mixer.update(dt);
   }
-  if (ikFix) leftHandIK();
+  if (ikFix && !sim.ladder) leftHandIK();
   updateHitViz();
+  updateHint();
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
