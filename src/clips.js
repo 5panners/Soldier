@@ -1008,7 +1008,16 @@ export function buildClipLibrary() {
   clips.push(locomotion('ADS_Walk', GAITS.adsWalk, () => ({ st: ADS })));
 
   // Hip-fire posture while walking (stock clamped under the arm)
-  clips.push(locomotion('HipFire_Walk', GAITS.adsWalk, () => ({ st: derive(HIP, { chestQ: qEuler(deg(14), deg(-15), deg(2)) }) })));
+  // Firing from the hip does not slow him down: the same walk and run gaits (and speeds) as the
+  // low-ready carry, with the stock clamped under the arm and the chest turned to the target.
+  const HIPW_UPPER = lively(HIP, {
+    pitch: 12, yaw: -15, roll: 2, pelvisYaw0: -4, counter: 0.55, pitchAmp: 0.9, rollAmp: 0.7, clavAmp: 1.0, headPitch: 1, headAmp: 0.9,
+  });
+  clips.push(locomotion('HipFire_Walk', GAITS.walk, HIPW_UPPER));
+  const HIPR_UPPER = lively(HIP, {
+    pitch: 18, yaw: -13, roll: 1, pelvisYaw0: -5, counter: 0.6, pitchAmp: 1.6, rollAmp: 1.2, clavAmp: 1.6, headPitch: 3, headAmp: 1.4, phase: 0.06,
+  });
+  clips.push(locomotion('HipFire_Run', GAITS.run, HIPR_UPPER));
 
   // Static reference poses (also used as additive references for recoil layering)
   clips.push(staticPose('Idle_Pose', LR));

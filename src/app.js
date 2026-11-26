@@ -515,7 +515,7 @@ let ikFix = true;
 let groundScroll = 0, groundScrollX = 0;
 let lastClipTime = 0;
 const GROUPS = [
-  ['Locomotion', ['Idle', 'Walk', 'Run', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk']],
+  ['Locomotion', ['Idle', 'Walk', 'Run', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk', 'HipFire_Run']],
   ['Weapon', ['ADS_Idle', 'HipFire_Idle', 'ADS_Fire', 'ADS_Fire_Auto', 'HipFire_Fire', 'HipFire_Fire_Auto']],
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
@@ -815,7 +815,7 @@ function updatePlay(dt) {
   // The camera never steers him. (Prone: A/D turn, since there is no prone strafe.)
   const moving = f !== 0 || (r !== 0 && (sim.posture || 'stand') !== 'prone');
   const posture = sim.posture || 'stand';
-  const run = (keys.ShiftLeft || keys.ShiftRight) && sim.aim === 'none' && f > 0 && posture === 'stand';
+  const run = (keys.ShiftLeft || keys.ShiftRight) && (sim.aim === 'none' || sim.aim === 'hip') && f > 0 && posture === 'stand';
   let aimMode = sim.fire && sim.aim === 'none' ? 'hip' : sim.aim;
   if (posture !== 'stand' && aimMode === 'hip') aimMode = 'ads'; // crouched/prone fire from the shoulder
   if (posture === 'prone') aimMode = 'ads';
@@ -861,8 +861,8 @@ function updatePlay(dt) {
     } else if (strafeOnly && posture === 'stand') {
       // walking / running strafe: the walk (or run with Shift) with the hips turned into the
       // direction of travel and the chest still facing forward, like a running strafe
-      const runStrafe = (keys.ShiftLeft || keys.ShiftRight) && aimMode === 'none';
-      clip = runStrafe ? 'Run' : aimMode === 'hip' ? P.hipWalk : P.walk;
+      const runStrafe = (keys.ShiftLeft || keys.ShiftRight) && aimMode !== 'ads';
+      clip = runStrafe ? (aimMode === 'hip' ? 'HipFire_Run' : 'Run') : aimMode === 'hip' ? P.hipWalk : P.walk;
       moveOff = (r > 0 ? -1 : 1) * deg(85); lowerYaw = moveOff;
       speed = DEFS[clip].speed;
     } else if (strafeOnly) {
@@ -871,7 +871,8 @@ function updatePlay(dt) {
       lowerYaw = moveOff * 0.85; speed = DEFS[clip].speed;
     } else if (aimMode !== 'none') {
       if (moving) {
-        clip = aimMode === 'ads' ? P.adsWalk : P.hipWalk;
+        // firing from the hip keeps the full walking / running speed
+        clip = aimMode === 'ads' ? P.adsWalk : run && posture === 'stand' ? 'HipFire_Run' : P.hipWalk;
         speed = DEFS[clip].speed; if (back) timeScale = -1;
       } else clip = aimMode === 'ads' ? P.ads : P.hip;
     } else if (moving) {
@@ -1055,7 +1056,7 @@ function updatePlayCamera(dt) {
     camera.near = eyeThroughSight() ? 0.07 : 0.04; camera.updateProjectionMatrix(); // clip the helmet brim; the optic is ~0.28 m away
     return;
   }
-  const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
+  const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'HipFire_Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
   camera.fov += (fovWant - camera.fov) * Math.min(1, dt * 6); camera.near = 0.02; camera.updateProjectionMatrix();
   const dist = (sim.aim === 'ads' ? 2.1 : 2.6) * (sim.zoom || 1); // mouse wheel scales the orbit radius
   const side = sim.aim === 'ads' ? -0.75 : -0.55;

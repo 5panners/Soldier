@@ -122,9 +122,16 @@
     "events": {}
   },
   "HipFire_Walk": {
-    "duration": 1.2,
+    "duration": 1.12,
     "loop": true,
-    "inPlaceSpeed": 0.9,
+    "inPlaceSpeed": 1.15,
+    "shots": [],
+    "events": {}
+  },
+  "HipFire_Run": {
+    "duration": 0.66,
+    "loop": true,
+    "inPlaceSpeed": 5.2,
     "shots": [],
     "events": {}
   },

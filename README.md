@@ -20,7 +20,7 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 
 | Group | Clips |
 |---|---|
-| Locomotion (in place) | `Strafe_Left` / `Strafe_Right` (side-step 0.7 m/s), `ADS_Strafe_Left` / `ADS_Strafe_Right` (aimed side-step 0.53 m/s), `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.15 m/s, `Run` 5.2 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 0.9 m/s |
+| Locomotion (in place) | `Strafe_Left` / `Strafe_Right` (side-step 0.7 m/s), `ADS_Strafe_Left` / `ADS_Strafe_Right` (aimed side-step 0.53 m/s), `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.15 m/s, `Run` 5.2 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 1.15 m/s, `HipFire_Run` 5.2 m/s |
 | Weapon stances | `ADS_Idle`, `HipFire_Idle` |
 | Firing | `ADS_Fire`, `ADS_Fire_Auto` (700 RPM loop), `HipFire_Fire`, `HipFire_Fire_Auto` |
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
