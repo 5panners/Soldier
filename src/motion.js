@@ -90,7 +90,7 @@ export function gaitFoot(phi, g, side) {
   let pitch = lerp(-g.toePitch, g.hsPitch, pe) + (g.swingPitchBias || 0) * Math.sin(Math.PI * u);
   const yaw = side * g.toeOut;
   const toe = s0.toe * (1 - smooth(u * 3)) + (g.swingToe || 0) * Math.sin(Math.PI * u);
-  return { pos, quat: footQuat(pitch, yaw), toe, planted: false };
+  return { pos, quat: footQuat(pitch, yaw), toe, planted: false, u };
 }
 
 // --------------------------------------------------------------------------

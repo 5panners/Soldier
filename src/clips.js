@@ -122,9 +122,9 @@ function kneeAim(_pelvisYaw, side) {
 export const GAITS = {
   walk: {
     // relaxed patrol walk: ~102 steps/min, soft heel strikes, easy roll-off
-    T: 1.18, v: 1.15, stance: 0.62, heelRock: 0.11, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
-    hsPitch: deg(12), toePitch: deg(32), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
-    swingInset: 0.012, landVy: 0.12, pitchEase: 2.4, swingToe: deg(6),
+    T: 1.18, v: 1.15, stance: 0.62, heelRock: 0.14, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
+    hsPitch: deg(10), toePitch: deg(32), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
+    swingInset: 0.012, landVy: 0.06, pitchEase: 2.4, swingToe: deg(6),
     hips: (p) => ({
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
       // a touch of 1st harmonic keeps left/right steps from being mirror-perfect
@@ -175,20 +175,32 @@ export const GAITS = {
 };
 for (const g of Object.values(GAITS)) g.L = g.v * g.T;
 
-function hipsReachBound(hipsPos, hipsQ, feet) {
-  // only feet on the ground limit the pelvis height; a swinging leg simply bends or reaches
+function hipsReachBound(hipsPos, hipsQ, feet, soft = false) {
+  // only feet on the ground limit the pelvis height; a swinging leg simply bends or reaches.
+  // soft: a foot that has just left the ground or is about to land still limits the pelvis,
+  // with a slack that fades in/out over the swing, so the bound is continuous across toe-off and
+  // heel strike (no pop of the pelvis when the trailing leg is released, no late drag on landing)
   let bound = Infinity;
   for (const s of ['Left', 'Right']) {
-    if (feet[s].planted === false) continue;
+    let slack = 0;
+    if (feet[s].planted === false) {
+      if (!soft || feet[s].u === undefined) continue;
+      const u = feet[s].u, sm = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+      slack = 0.14 * sm(u / 0.35) * (1 - sm((u - 0.6) / 0.4));
+      if (slack <= 0 && u > 0.5) slack = 0;
+    }
     const o = BIND_LOCAL[`${s}UpLeg`].clone().applyQuaternion(hipsQ);
     const a = feet[s].pos;
     const dx = hipsPos.x + o.x - a.x, dz = hipsPos.z + o.z - a.z;
     const d2 = dx * dx + dz * dz;
     const b = a.y - o.y + Math.sqrt(Math.max(0, LEG_R * LEG_R - d2));
-    bound = Math.min(bound, b);
+    bound = Math.min(bound, b + slack);
   }
   return bound;
 }
+
+/** Smooth minimum (never above min(a, b); within k*ln2 of it): no kink where two limits cross. */
+const smin = (a, b, k = 0.005) => (b === Infinity ? a : Math.min(a, b) - k * Math.log(1 + Math.exp(-Math.abs(a - b) / k)));
 
 /**
  * In-place locomotion cycle. upper(p, hips) returns {st, headWorld?} for the upper body.
@@ -203,11 +215,40 @@ function locomotion(name, g, upper, meta = {}) {
     const quat = qEuler(h.pitch, h.yaw, h.roll);
     rows.push({ p, feet: { Left: L, Right: R }, h, quat, y: h.pos.y });
   }
-  // keep the legs within reach (slight knee bend everywhere), then smooth periodically
-  let ys = rows.map((r) => Math.min(r.y, hipsReachBound(r.h.pos, r.quat, r.feet)));
-  ys = periodicSmooth(ys, 1.5);
-  ys = ys.map((y, i) => Math.min(y, hipsReachBound(rows[i].h.pos, rows[i].quat, rows[i].feet) + 0.002));
-  ys = periodicSmooth(ys, 0.8);
+  // keep the legs within reach (slight knee bend everywhere), then smooth periodically.
+  // Walks (long stance) use the soft bound; the run keeps the hard one (its swing legs are free).
+  const softReach = g.stance > 0.5;
+  let ys;
+  if (softReach) {
+    // Walks: the legs' reach limits the pelvis height with a cusp at each heel strike (a compass
+    // gait), which shows up as a stomp and a judder. Instead, fit a smooth low-harmonic curve to
+    // that limit, lower it just enough that it never exceeds the limit, and follow the nominal
+    // pelvis path wherever that is lower (soft minimum), so the pelvis dips and rises smoothly.
+    const bnd = rows.map((r) => hipsReachBound(r.h.pos, r.quat, r.feet, true));
+    const n = rows.length;
+    const fit = (arr, harm) => {
+      const mean = arr.reduce((a, b) => a + b, 0) / n;
+      return arr.map((_, i) => {
+        let y = mean;
+        for (const k of harm) {
+          let c = 0, sn = 0;
+          for (let j = 0; j < n; j++) { const a = (TAU * k * j) / n; c += arr[j] * Math.cos(a); sn += arr[j] * Math.sin(a); }
+          const a = (TAU * k * i) / n;
+          y += (2 / n) * (c * Math.cos(a) + sn * Math.sin(a));
+        }
+        return y;
+      });
+    };
+    const B = fit(bnd, [1, 2, 3, 4, 5, 6]);
+    const over = Math.max(0, ...B.map((y, i) => y - bnd[i]));
+    ys = rows.map((r, i) => smin(r.y, B[i] - over - 0.002, 0.008));
+    ys = periodicSmooth(ys, 1.5);
+  } else {
+    ys = rows.map((r) => Math.min(r.y, hipsReachBound(r.h.pos, r.quat, r.feet)));
+    ys = periodicSmooth(ys, 1.5);
+    ys = ys.map((y, i) => Math.min(y, hipsReachBound(rows[i].h.pos, rows[i].quat, rows[i].feet) + 0.002));
+    ys = periodicSmooth(ys, 0.8);
+  }
   // a swinging foot reaching for the next contact may be a little beyond the extended leg:
   // pull it back along the hip->foot line with a soft limit (no kink, no visible change)
   const reachMax = (LEG_UPPER + LEG_LOWER) * 0.999, soft = 0.03;
@@ -220,7 +261,11 @@ function locomotion(name, g, upper, meta = {}) {
       const d = f.pos.distanceTo(j), knee = reachMax - soft;
       if (d <= knee) continue;
       const x = d - knee, lim = knee + soft * (1 - Math.exp(-x / soft));
-      f.pos = j.clone().add(f.pos.clone().sub(j).multiplyScalar(lim / d));
+      // walks: the pelvis already respects a landing foot's reach, so fade the pull-back out as
+      // the heel comes down (otherwise the foot is lifted a few mm and then snaps to the floor)
+      const fade = softReach && f.u !== undefined ? 1 - smooth((f.u - 0.75) / 0.2) : 1;
+      const dl = d + (lim - d) * fade;
+      f.pos = j.clone().add(f.pos.clone().sub(j).multiplyScalar(dl / d));
     }
   });
   const acc = secondDerivative(ys, DT, true);
