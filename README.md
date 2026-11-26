@@ -20,7 +20,7 @@ Everything exports to a single **`exports/soldier.glb`** (mesh + skeleton + rifl
 
 | Group | Clips |
 |---|---|
-| Locomotion (in place) | `Strafe_Left` / `Strafe_Right` (side-step 0.7 m/s), `ADS_Strafe_Left` / `ADS_Strafe_Right` (aimed side-step 0.53 m/s), `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.15 m/s, `Run` 5.2 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 1.15 m/s, `HipFire_Run` 5.2 m/s |
+| Locomotion (in place) | `Strafe_Left` / `Strafe_Right` (side-step 0.7 m/s), `ADS_Strafe_Left` / `ADS_Strafe_Right` (aimed side-step 0.53 m/s), `Idle` (low ready, breathing, weight shift, scan), `Walk` 1.15 m/s, `Run` 5.2 m/s, `ADS_Walk` 0.9 m/s, `HipFire_Walk` 1.15 m/s, `HipFire_Run` 5.2 m/s, `ADS_Run` 5.2 m/s |
 | Weapon stances | `ADS_Idle`, `HipFire_Idle` |
 | Firing | `ADS_Fire`, `ADS_Fire_Auto` (700 RPM loop), `HipFire_Fire`, `HipFire_Fire_Auto` |
 | Transitions | `Idle_To_ADS`, `ADS_To_Idle`, `Idle_To_HipFire`, `HipFire_To_Idle`, `HipFire_To_ADS`, `ADS_To_HipFire` |
@@ -47,7 +47,7 @@ Then open <http://localhost:8080/>. No build step is needed; Three.js is vendore
 * **Play (WASD)** is a third-person sandbox with a firing range:
   * `W` / `S`: walk forward / back along the soldier's own facing. `A` / `D`: strafe left / right, a walk (or run with Shift) with the hips turned into the direction of travel and the chest facing forward; while aiming it is a careful side-step (W/S with A/D walks diagonally). `Q` / `E`: turn him. Shooter-style mouse look: moving the mouse left/right turns him with the camera locked behind; mouse up/down or the ↑/↓ arrows tilt the view; the wheel zooms. `G`: god cam, a free camera that orbits all the way round him (mouse or arrow keys, wheel zoom, `R` / `F` raise or lower the focus point) while he carries on as normal; press `G` again to return to the chase camera. Turning on the spot keeps his feet planted until about 55°, then he steps round. The step rate follows his actual speed as he accelerates and decelerates, so the feet stay locked to the ground. `Shift`: run. `Space`: from a walk or run, leap at once (or at the very next footfall if the take-off foot has just left the ground); standing still, a two-footed jump; facing a low wall, vault it.
   * `C`: crouch / stand. `Z`: go prone / stand up. While prone, `W A S D` crawls.
-  * `RMB`: toggle aim down sights on / off. `LMB`: fire. `H`: toggle the hip-fire stance.
+  * `RMB`: toggle aim down sights on / off; hold `Shift` while aiming to move at full speed (the rifle stays up, but shots scatter in proportion to speed: about 0.05° still, 0.7° at the aimed walk, 4° at a sprint, and the reticle opens to show it; hip fire scatters 1.2° to 3.7°). `LMB`: fire. `H`: toggle the hip-fire stance.
   * `B`: show the hit boxes. Every rock, crate, wall and target post blocks the soldier; bullets hit all of them.
   * `V`: first-person eye view. It looks through the optic while aiming down sights, and straight ahead from the eyes otherwise. `L`: bore-sight laser along the barrel. `Esc`: back to the viewer.
 

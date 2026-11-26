@@ -1008,6 +1008,8 @@ export function buildClipLibrary() {
 
   // Aiming while walking: 'Groucho' heel-to-toe walk, chest world-locked, cheek weld kept
   clips.push(locomotion('ADS_Walk', GAITS.adsWalk, () => ({ st: ADS })));
+  // Aiming at full speed (Shift while aiming): the run gait with the chest and rifle held on target
+  clips.push(locomotion('ADS_Run', GAITS.run, () => ({ st: ADS })));
 
   // Hip-fire posture while walking (stock clamped under the arm)
   // Firing from the hip does not slow him down: the same walk and run gaits (and speeds) as the

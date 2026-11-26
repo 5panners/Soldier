@@ -318,9 +318,18 @@ const tracerMat = new THREE.MeshBasicMaterial({ color: '#ffcf80', transparent: t
 const tracerGeo = new THREE.CylinderGeometry(0.004, 0.004, 1.6, 4); tracerGeo.rotateX(Math.PI / 2);
 const live = [];
 
+/** Scatter half-angle (degrees) of a shot right now: tight when aimed and still, wide when moving fast. */
+function spreadDeg() {
+  const mf = Math.min(1, (sim.speed || 0) / 5.2);          // 0 standing .. 1 at full run speed
+  const posture = sim.posture || 'stand';
+  if (posture !== 'stand') return 0.05 + 0.4 * mf;
+  if (sim.aim === 'ads') return 0.05 + 4.0 * mf;           // aimed fire suffers badly at a sprint
+  return 1.2 + 2.5 * mf;                                   // hip fire is loose to begin with
+}
 function fireEffects() {
   S.group.updateMatrixWorld(true);
-  const mp = new THREE.Vector3(), mq = new THREE.Quaternion();
+  const mp = new THREE.Vector3();
+  let mq = new THREE.Quaternion();
   muzzleNode.getWorldPosition(mp); muzzleNode.getWorldQuaternion(mq);
   const cone = new THREE.Mesh(flashGeo, flashMat.clone());
   cone.position.copy(mp); cone.quaternion.copy(mq);
@@ -332,7 +341,15 @@ function fireEffects() {
   live.push({ o: cone, life: 0.045, t: 0 }, { o: star, life: 0.035, t: 0 });
   flashLight.position.copy(mp); flashLight.intensity = 6;
   // the round leaves along the bore axis (the Muzzle node's +Z is the barrel's axis)
-  const bore = new THREE.Vector3(0, 0, 1).applyQuaternion(mq);
+  let bore = new THREE.Vector3(0, 0, 1).applyQuaternion(mq);
+  // accuracy: the further he moves while firing, the wider the scatter (aimed fire is the tightest)
+  const sp = spreadDeg();
+  if (sp > 0) {
+    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * deg(sp);
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(mq), up = new THREE.Vector3(0, 1, 0).applyQuaternion(mq);
+    bore.addScaledVector(side, Math.cos(a) * Math.tan(r)).addScaledVector(up, Math.sin(a) * Math.tan(r)).normalize();
+    mq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), bore);
+  }
   const hit = castRay(mp, bore);
   lastShot = { from: mp.clone(), dir: bore.clone(), hit: hit.point.clone(), t: performance.now() };
   if (Math.random() < 0.34) {
@@ -515,7 +532,7 @@ let ikFix = true;
 let groundScroll = 0, groundScrollX = 0;
 let lastClipTime = 0;
 const GROUPS = [
-  ['Locomotion', ['Idle', 'Walk', 'Run', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk', 'HipFire_Run']],
+  ['Locomotion', ['Idle', 'Walk', 'Run', 'Strafe_Left', 'Strafe_Right', 'ADS_Walk', 'ADS_Strafe_Left', 'ADS_Strafe_Right', 'HipFire_Walk', 'HipFire_Run', 'ADS_Run']],
   ['Weapon', ['ADS_Idle', 'HipFire_Idle', 'ADS_Fire', 'ADS_Fire_Auto', 'HipFire_Fire', 'HipFire_Fire_Auto']],
   ['Transitions', ['Idle_To_ADS', 'ADS_To_Idle', 'Idle_To_HipFire', 'HipFire_To_Idle', 'HipFire_To_ADS', 'ADS_To_HipFire']],
   ['Crouch', ['Crouch_Idle', 'Crouch_Walk', 'Crouch_ADS_Idle', 'Crouch_ADS_Walk', 'Crouch_ADS_Fire', 'Crouch_ADS_Fire_Auto', 'Stand_To_Crouch', 'Crouch_To_Stand', 'Crouch_To_Crouch_ADS', 'Crouch_ADS_To_Crouch']],
@@ -816,6 +833,8 @@ function updatePlay(dt) {
   const moving = f !== 0 || (r !== 0 && (sim.posture || 'stand') !== 'prone');
   const posture = sim.posture || 'stand';
   const run = (keys.ShiftLeft || keys.ShiftRight) && (sim.aim === 'none' || sim.aim === 'hip') && f > 0 && posture === 'stand';
+  // Shift while aiming down the sights: move at full speed (the rifle stays up, but accuracy suffers)
+  const adsRun = (keys.ShiftLeft || keys.ShiftRight) && sim.aim === 'ads' && posture === 'stand';
   let aimMode = sim.fire && sim.aim === 'none' ? 'hip' : sim.aim;
   if (posture !== 'stand' && aimMode === 'hip') aimMode = 'ads'; // crouched/prone fire from the shoulder
   if (posture === 'prone') aimMode = 'ads';
@@ -854,6 +873,11 @@ function updatePlay(dt) {
     if (posture === 'prone') {
       if (f !== 0) { clip = P.walk; speed = DEFS[clip].speed; if (back) timeScale = -1; }
       else clip = P.idle;
+    } else if (strafeOnly && posture === 'stand' && aimMode === 'ads' && adsRun) {
+      // aiming at full speed: sprint sideways with the hips turned into the travel direction
+      clip = 'ADS_Run';
+      moveOff = (r > 0 ? -1 : 1) * deg(85); lowerYaw = moveOff;
+      speed = DEFS[clip].speed;
     } else if (strafeOnly && posture === 'stand' && aimMode === 'ads') {
       // aiming: careful side-step shuffle
       clip = `ADS_Strafe_${r > 0 ? 'Right' : 'Left'}`;
@@ -872,7 +896,7 @@ function updatePlay(dt) {
     } else if (aimMode !== 'none') {
       if (moving) {
         // firing from the hip keeps the full walking / running speed
-        clip = aimMode === 'ads' ? P.adsWalk : run && posture === 'stand' ? 'HipFire_Run' : P.hipWalk;
+        clip = aimMode === 'ads' ? (adsRun && f >= 0 ? 'ADS_Run' : P.adsWalk) : run && posture === 'stand' ? 'HipFire_Run' : P.hipWalk;
         speed = DEFS[clip].speed; if (back) timeScale = -1;
       } else clip = aimMode === 'ads' ? P.ads : P.hip;
     } else if (moving) {
@@ -1056,7 +1080,7 @@ function updatePlayCamera(dt) {
     camera.near = eyeThroughSight() ? 0.07 : 0.04; camera.updateProjectionMatrix(); // clip the helmet brim; the optic is ~0.28 m away
     return;
   }
-  const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'HipFire_Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
+  const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'HipFire_Run' || sim.base === 'ADS_Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
   camera.fov += (fovWant - camera.fov) * Math.min(1, dt * 6); camera.near = 0.02; camera.updateProjectionMatrix();
   const dist = (sim.aim === 'ads' ? 2.1 : 2.6) * (sim.zoom || 1); // mouse wheel scales the orbit radius
   const side = sim.aim === 'ads' ? -0.75 : -0.55;
@@ -1104,6 +1128,11 @@ function frame() {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
     document.body.classList.toggle('eyeview', (!!sim.eye && eyeThroughSight()) || !!sim.god);
+    // reticle opens up with the scatter so the accuracy loss is visible
+    const sp = spreadDeg(), rv = $('#reticle');
+    const px = Math.max(6, (2 * Math.tan(deg(sp)) / (2 * Math.tan(deg(camera.fov / 2)))) * renderer.domElement.clientHeight);
+    if (sp > 0.5) { rv.style.width = rv.style.height = `${px.toFixed(0)}px`; rv.style.margin = `${(-px / 2).toFixed(1)}px`; rv.style.background = 'transparent'; rv.style.border = '1.5px solid rgba(255,255,255,.7)'; }
+    else { rv.style.width = rv.style.height = '6px'; rv.style.margin = '-3px'; rv.style.background = 'rgba(255,255,255,.7)'; rv.style.border = '0'; }
     laser.visible = sim.laser;
     if (sim.laser) {
       const { p, d } = boreRay();

@@ -121,6 +121,13 @@
     "shots": [],
     "events": {}
   },
+  "ADS_Run": {
+    "duration": 0.66,
+    "loop": true,
+    "inPlaceSpeed": 5.2,
+    "shots": [],
+    "events": {}
+  },
   "HipFire_Walk": {
     "duration": 1.12,
     "loop": true,
