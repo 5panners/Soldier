@@ -223,10 +223,13 @@ const COLLIDERS = [];
 // floors are walkable surfaces at their own heights (groundH picks the one at the soldier's level).
 const structures = new THREE.Group(); scene.add(structures);
 const LADDERS = [];
-function addSolid(x0, x1, y0, y1, z0, z1, mat, walk = false) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat);
-  m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
-  structures.add(m);
+function addSolid(x0, x1, y0, y1, z0, z1, mat, walk = false, visible = true) {
+  let m = null;
+  if (visible) { // (an invisible collider gets no mesh, so bullets and the camera pass through it)
+    m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat);
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
+    structures.add(m);
+  }
   COLLIDERS.push({ type: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, yaw: 0, top: y1, bot: y0, walk });
   return m;
 }
@@ -255,7 +258,20 @@ function addSolid(x0, x1, y0, y1, z0, z1, mat, walk = false) {
   // (treads are walkable surfaces without a collision wall of their own, like the test course stairs;
   // a stringer wall keeps him on the flight)
   for (let i = 0; i < 15; i++) addSolid(37.4, 38.8, 0, (i + 1) * 0.2, Z0 + 0.4 + i * 0.28, Z0 + 0.4 + (i + 1) * 0.28, i % 2 ? dark : wall, true);
-  addSolid(37.1, 37.4, 0, 3.0, Z0 + 0.4, Z0 + 0.4 + 15 * 0.28, dark);
+  // open on the west side so the flight can be seen and entered; from the fourth tread up (above 0.8 m)
+  // an invisible banister keeps him on the stairs, with a visible handrail on posts
+  for (let i = 3; i < 15; i++) addSolid(37.2, 37.4, 0, (i + 1) * 0.2 + 1.0, Z0 + 0.4 + i * 0.28, Z0 + 0.4 + (i + 1) * 0.28, dark, false, false);
+  {
+    const zA = Z0 + 0.4 + 3 * 0.28, zB = Z0 + 0.4 + 15 * 0.28, yA = 0.8 + 0.95, yB = 3.0 + 0.95;
+    const len = Math.hypot(zB - zA, yB - yA), rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, len), steel);
+    rail.position.set(37.3, (yA + yB) / 2, (zA + zB) / 2); rail.rotation.x = -Math.atan2(yB - yA, zB - zA); structures.add(rail);
+    for (let i = 3; i < 15; i += 2) {
+      const h = (i + 1) * 0.2 + 0.95, post = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.05), steel);
+      post.position.set(37.3, h / 2, Z0 + 0.4 + (i + 0.5) * 0.28); structures.add(post);
+    }
+  }
+  // lights, so the interior reads: one on each floor
+  for (const y of [2.5, 5.5]) { const l = new THREE.PointLight('#ffe9c7', 14, 11, 1.6); l.position.set(35, y, 11); structures.add(l); }
   // tower: four legs and a 4 x 4 m platform whose top is 10 m up, centre (42, 24)
   const TX = 42, TZ = 24, TH = 10.0;
   for (const sx of [-1.7, 1.7]) for (const sz of [-1.7, 1.7]) addSolid(TX + sx - 0.15, TX + sx + 0.15, 0, TH - 0.3, TZ + sz - 0.15, TZ + sz + 0.15, steel);
@@ -831,7 +847,7 @@ window.addEventListener('keydown', (e) => {
     }
     else startJump(); // two-footed standing jump only from a standstill
   }
-  if (e.code === 'KeyV') { sim.eye = !sim.eye; if (sim.eye) sim.god = false; }
+  if (e.code === 'KeyV') { sim.eye = !sim.eye; sim.sightBlend = undefined; sim._sbT = 0; if (sim.eye) sim.god = false; }
   if (e.code === 'KeyG') {
     sim.god = !sim.god;
     if (sim.god) { // start from the current chase view, then orbit freely
@@ -1337,6 +1353,7 @@ function eyeThroughSight() {
   if (posture === 'prone') return (sim.speed || 0) < 0.05; // crawling: rifle is cradled
   return sim.aim === 'ads';
 }
+const _eyeCam = new THREE.PerspectiveCamera();
 function updatePlayCamera(dt) {
   const B = S.bones;
   S.group.updateMatrixWorld(true);
@@ -1351,23 +1368,24 @@ function updatePlayCamera(dt) {
     return;
   }
   if (sim.eye) {
+    // first-person: blend between the looking-ahead view from between the eyes and the view
+    // through the optic, so going into (or out of) ADS glides in over ~0.25 s instead of snapping
+    const want = eyeThroughSight() ? 1 : 0;
+    const nowT = performance.now(), sdt = sim._sbT ? Math.min(0.05, (nowT - sim._sbT) / 1000) : 0; sim._sbT = nowT; // (this runs twice per frame)
+    sim.sightBlend = THREE.MathUtils.clamp((sim.sightBlend ?? want) + (want ? sdt : -sdt) / 0.25, 0, 1);
+    const k = smoother01(sim.sightBlend);
     const eye = RIGHT_EYE_LOCAL.clone().applyMatrix4(B.Head.matrixWorld);
-    camera.position.copy(eye);
-    if (eyeThroughSight()) {
-      // aiming down sights: look through the optic along the rifle
-      const rq = new THREE.Quaternion(); S.rifle.getWorldQuaternion(rq);
-      camera.quaternion.copy(rq).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
-      camera.fov = 32;
-    } else {
-      // not aiming: first-person view from the eyes, looking ahead where the camera points
-      // (eye level between both eyes, slightly forward so the face doesn't fill the view)
-      const mid = new THREE.Vector3(0, 0.083, 0.135).applyMatrix4(B.Head.matrixWorld);
-      camera.position.copy(mid);
-      const dir = new THREE.Vector3(Math.sin(sim.camYaw) * Math.cos(sim.camPitch), -Math.sin(sim.camPitch), Math.cos(sim.camYaw) * Math.cos(sim.camPitch));
-      camera.lookAt(mid.clone().add(dir));
-      camera.fov = 70;
-    }
-    camera.near = eyeThroughSight() ? 0.07 : 0.04; camera.updateProjectionMatrix(); // clip the helmet brim; the optic is ~0.28 m away
+    // A: not aiming - eye level between both eyes, slightly forward so the face doesn't fill the view
+    const mid = new THREE.Vector3(0, 0.083, 0.135).applyMatrix4(B.Head.matrixWorld);
+    const dir = new THREE.Vector3(Math.sin(sim.camYaw) * Math.cos(sim.camPitch), -Math.sin(sim.camPitch), Math.cos(sim.camYaw) * Math.cos(sim.camPitch));
+    const qa = _eyeCam; qa.position.copy(mid); qa.lookAt(mid.clone().add(dir)); // (a camera: looks down -Z)
+    // B: aiming down the sights - the eye, looking along the rifle
+    const rq = new THREE.Quaternion(); S.rifle.getWorldQuaternion(rq);
+    const qb = rq.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+    camera.position.copy(mid).lerp(eye, k);
+    camera.quaternion.copy(qa.quaternion).slerp(qb, k);
+    camera.fov = 70 + (32 - 70) * k;
+    camera.near = 0.04 + 0.03 * k; camera.updateProjectionMatrix(); // clip the helmet brim; the optic is ~0.28 m away
     return;
   }
   const fovWant = sim.aim === 'ads' ? 30 : sim.base === 'Run' || sim.base === 'HipFire_Run' || sim.base === 'ADS_Run' || sim.base === 'Run_Jump' || sim.base === 'Run_Jump_Left' ? 48 : 42;
@@ -1430,7 +1448,7 @@ function frame() {
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
-    document.body.classList.toggle('eyeview', (!!sim.eye && eyeThroughSight()) || !!sim.god);
+    document.body.classList.toggle('eyeview', (!!sim.eye && eyeThroughSight() && (sim.sightBlend ?? 1) > 0.6) || !!sim.god);
     // reticle opens up with the scatter so the accuracy loss is visible
     const sp = spreadDeg(), rv = $('#reticle');
     const px = Math.max(6, (2 * Math.tan(deg(sp)) / (2 * Math.tan(deg(camera.fov / 2)))) * renderer.domElement.clientHeight);
@@ -1492,6 +1510,6 @@ if (params.has('t')) {
   if (current.getClip().userData.speed) props.position.z = 0;
 }
 if (params.has('noui')) document.body.classList.add('noui');
-window.__dbg = { sim, camera, S, actions, aim: _aim, boreRay, lastShot: () => lastShot };
+window.__dbg = { sim, camera, S, actions, scene, structures, aim: _aim, boreRay, lastShot: () => lastShot };
 requestAnimationFrame(frame);
 setTimeout(() => { window.__done = true; }, 400);
