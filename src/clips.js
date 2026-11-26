@@ -122,8 +122,8 @@ function kneeAim(_pelvisYaw, side) {
 export const GAITS = {
   walk: {
     // upright patrol walk: ~107 steps/min, near-straight stance leg, soft heel strikes, easy roll-off
-    T: 1.12, v: 1.15, stance: 0.62, heelRock: 0.14, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
-    hsPitch: deg(10), toePitch: deg(48), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
+    T: 1.12, v: 1.15, stance: 0.62, heelRock: 0.18, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
+    hsPitch: deg(11), toePitch: deg(48), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
     swingInset: 0.012, landVy: 0.06, pitchEase: 2.4, swingToe: deg(6),
     hips: (p) => ({
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
@@ -134,7 +134,7 @@ export const GAITS = {
       yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
       pitch: deg(2) + deg(1.2) * Math.cos(2 * TAU * (p - 0.08)),
     }),
-    lag: { freq: 3.1, zeta: 0.38, gain: 0.75 },
+    lag: { freq: 3.1, zeta: 0.45, gain: 0.5 },
     lagX: { freq: 2.3, zeta: 0.45, gain: 0.6 },
   },
   run: {
@@ -230,9 +230,9 @@ function locomotion(name, g, upper, meta = {}) {
     // limit is smoothed, and just the excess it creates around the V is shaved off with a smooth
     // dip (a little knee give during loading response).
     const bnd = rows.map((r) => hipsReachBound(r.h.pos, r.quat, r.feet, true));
-    const bs = periodicSmooth(bnd, 3.0);
+    const bs = periodicSmooth(bnd, 5.0);
     const ex = bs.map((y, i) => Math.max(0, y - bnd[i] + 0.0015));
-    const es = periodicSmooth(ex, 4.0);
+    const es = periodicSmooth(ex, 6.0);
     let alpha = 1;
     es.forEach((e, i) => { if (e > 1e-5) alpha = Math.max(alpha, ex[i] / e); });
     const path = bs.map((y, i) => y - alpha * es[i]);
