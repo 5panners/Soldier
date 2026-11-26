@@ -188,8 +188,8 @@ function buildLeg(B, side) {
     [0.51, 0.057, 0.060, 0.004, wm([`${P}UpLeg`, 0.5], [`${P}Leg`, 0.5])],
     [0.465, 0.056, 0.060, -0.002, wm([`${P}UpLeg`, 0.2], [`${P}Leg`, 0.8])],
     [0.37, 0.058, 0.066, -0.010, w1(`${P}Leg`)],
-    [0.25, 0.048, 0.054, -0.004, w1(`${P}Leg`)],
-    [0.19, 0.050, 0.056, 0.0, w1(`${P}Leg`)],
+    [0.31, 0.049, 0.055, -0.004, w1(`${P}Leg`)],
+    [0.272, 0.0575, 0.064, 0.0, w1(`${P}Leg`)], // trousers bloused over the boot top
   ];
   const rings = rows.map(([y, rx, rz, zo]) => frameRing(V(at(y), y, zo), down, sx, rx * BUILD.leg, rz * BUILD.leg, 8, { phase: Math.PI / 8 }));
   B.loft(rings, ['fabric', 'fabric', 'fabricLight', 'fabric', 'fabric', 'fabric', 'fabric', 'fabric', 'fabricDark'], rows.map((r) => r[4]), { capStart: false, capEnd: true });
@@ -199,11 +199,14 @@ function buildLeg(B, side) {
   B.box(V(at(0.51), 0.505, 0.062 * BUILD.leg), [0.085 * BUILD.leg, 0.10, 0.03], 'pad', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]), { taperTop: [0.9, 1], taperBottom: [0.85, 1] });
   B.box(V(at(0.51), 0.505, 0.079 * BUILD.leg), [0.06 * BUILD.leg, 0.07, 0.01], 'black', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]));
 
-  // boot shaft: rounded (12-sided) tube from the padded collar down to the ankle, flaring slightly
+  // boot shaft: a tall (about 22 cm), rounded 12-sided tube from the padded collar to the ankle,
+  // flaring slightly at the top and closing in over the instep
   const bootRows = [
-    [0.226, 0.058, 0.064, 0.000, w1(`${P}Leg`)],
-    [0.215, 0.054, 0.060, 0.000, w1(`${P}Leg`)],
-    [0.14, 0.054, 0.062, 0.000, wm([`${P}Leg`, 0.7], [`${P}Foot`, 0.3])],
+    [0.296, 0.0575, 0.063, 0.000, w1(`${P}Leg`)],
+    [0.286, 0.0535, 0.059, 0.000, w1(`${P}Leg`)],
+    [0.235, 0.0525, 0.058, 0.000, w1(`${P}Leg`)],
+    [0.18, 0.0535, 0.060, 0.000, wm([`${P}Leg`, 0.85], [`${P}Foot`, 0.15])],
+    [0.135, 0.054, 0.062, 0.002, wm([`${P}Leg`, 0.55], [`${P}Foot`, 0.45])],
     [0.095, 0.055, 0.068, 0.006, wm([`${P}Leg`, 0.25], [`${P}Foot`, 0.75])],
   ];
   const brings = bootRows.map(([y, rx, rz, zo]) => frameRing(V(ank.x, y, zo), down, sx, rx * BUILD.boot, rz * BUILD.boot, 12, { phase: Math.PI / 12 }));
@@ -212,13 +215,17 @@ function buildLeg(B, side) {
   // ankle, rounded toe), with a matching sole and a deeper heel block
   const F = w1(`${P}Foot`), T = w1(`${P}ToeBase`);
   const footStations = [ // z, half width, upper centre y, upper half height, sole centre y, sole half height
-    [-0.083, 0.014, 0.052, 0.020, 0.017, 0.017],
-    [-0.074, 0.030, 0.054, 0.030, 0.017, 0.017],
-    [-0.058, 0.044, 0.057, 0.036, 0.017, 0.017],
-    [-0.030, 0.050, 0.058, 0.038, 0.016, 0.016],
-    [0.020, 0.052, 0.060, 0.038, 0.012, 0.012],
-    [0.070, 0.052, 0.057, 0.036, 0.012, 0.012],
-    [0.120, 0.0505, 0.050, 0.033, 0.012, 0.012],
+    // sole: a small heel block (3.5 cm) under the back of the foot, a stepped heel breast, a slightly
+    // raised arch and a thinner forefoot sole
+    [-0.083, 0.014, 0.052, 0.020, 0.018, 0.018],
+    [-0.074, 0.030, 0.054, 0.030, 0.018, 0.018],
+    [-0.058, 0.044, 0.057, 0.036, 0.018, 0.018],
+    [-0.035, 0.050, 0.058, 0.038, 0.018, 0.018],
+    [-0.018, 0.0505, 0.059, 0.038, 0.0265, 0.0135],
+    [0.0, 0.052, 0.060, 0.038, 0.0285, 0.0125],
+    [0.05, 0.052, 0.057, 0.036, 0.0275, 0.0125],
+    [0.10, 0.0505, 0.052, 0.034, 0.0215, 0.0125],
+    [0.12, 0.0505, 0.050, 0.033, 0.0155, 0.0125],
     [0.135, 0.050, 0.044, 0.034, 0.012, 0.012],
     [0.170, 0.0505, 0.043, 0.033, 0.012, 0.012], [0.200, 0.0485, 0.041, 0.031, 0.012, 0.012],
     [0.224, 0.043, 0.038, 0.028, 0.012, 0.012], [0.241, 0.034, 0.034, 0.023, 0.012, 0.012],
