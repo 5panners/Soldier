@@ -95,7 +95,9 @@
     "loop": true,
     "inPlaceSpeed": 0,
     "shots": [],
-    "events": {}
+    "events": {},
+    "climb": 0.75,
+    "climbCycle": 0.6
   },
   "Run_Jump": {
     "duration": 1.225,
