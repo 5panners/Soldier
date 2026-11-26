@@ -8,6 +8,7 @@ import { leftGrip } from './weapon.js';
 import { twoBoneIK, frameRotation, twistAbout, qPow } from './solver.js';
 import { BIND_LOCAL, RIGHT_EYE_LOCAL } from './skeleton.js';
 import { exportGLB } from './export.js';
+import { buildMap } from './map.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -22,287 +23,48 @@ renderer.toneMappingExposure = 1.05;
 $('#view').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const SKY = new THREE.Color('#a9bfcf');
+const SKY = new THREE.Color('#c6d8e6');
 scene.background = SKY;
-scene.fog = new THREE.Fog(SKY, 25, 90);
-scene.add(new THREE.HemisphereLight('#e4edf5', '#5d5646', 1.25));
-const sun = new THREE.DirectionalLight('#fff1dc', 2.6);
+scene.fog = new THREE.Fog('#dccdb0', 140, 700); // desert haze
+scene.add(new THREE.HemisphereLight('#e9f0f5', '#b39566', 1.15));
+const sun = new THREE.DirectionalLight('#fff0d4', 3.0);
 sun.position.set(4, 8, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.5, far: 30 });
-sun.shadow.bias = -0.0004;
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 });
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
-// ground: tiled texture so in-place locomotion can scroll it under the feet
-function groundTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#7b8763'; g.fillRect(0, 0, 256, 256);
-  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 1400; i++) {
-    g.fillStyle = ['#72805b', '#84906b', '#6d7956', '#8b936f'][i % 4];
-    g.fillRect(rnd() * 256, rnd() * 256, 2 + rnd() * 5, 2 + rnd() * 5);
-  }
-  g.strokeStyle = 'rgba(40,50,35,0.35)'; g.lineWidth = 2;
-  g.strokeRect(0, 0, 256, 256);
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(60, 60);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-const gtex = groundTexture();
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshStandardMaterial({ map: gtex, roughness: 1 }));
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// ------------------------------------------------------------------ test course (play mode)
-// Stairs, ramps, a steep slope and a patch of uneven ground, west of the spawn point.
-// groundH(x, z) is the walkable height everywhere; foot IK and the character root use it.
-// jump park: low platforms and rocks to jump onto, east of the spawn point
-function inPark(x, z) { return (x > 7.5 && x < 24 && z > -5.5 && z < 14) || (x > 26 && x < 47 && z > 3 && z < 32); }
-function inCourse(x, z) { return x > -42 && x < -13 && z > -8 && z < 28; }
-const TAN15 = Math.tan((15 * Math.PI) / 180), TAN25 = Math.tan((25 * Math.PI) / 180);
-function roughH(x, z) {
-  if (x < -40 || x > -31 || z < -6 || z > 26) return 0;
-  const edge = Math.min(1, (x + 40) / 1.5, (-31 - x) / 1.5, (z + 6) / 1.5, (26 - z) / 1.5);
-  const n = Math.sin(x * 1.7) * Math.cos(z * 1.3) * 0.6 + Math.sin(x * 0.6 + z * 0.8 + 1) * 0.4;
-  return 0.35 * (0.5 + 0.5 * n) * Math.max(0, edge);
-}
-/** Height of the floor the soldier at height `ref` would stand on at (x, z): the highest solid surface
- *  not more than a step above him (so a slab overhead, or the second floor of a building, is ignored
- *  from below, and is walked on from above). */
+// ------------------------------------------------------------------ the map: a desert military base (play mode)
+const MAP = buildMap();
+scene.add(MAP.ground, MAP.root);
+const ground = MAP.ground, gtex = MAP.groundTex;
+const COLLIDERS = MAP.colliders, WALLS = MAP.walls, LADDERS = MAP.ladders;
+const structures = MAP.root;
+/** Height of the floor the soldier at height `ref` would stand on at (x, z): the desert surface, or the
+ *  highest solid surface not more than a step above him (so a slab overhead, or the second floor of a
+ *  building, is ignored from below and walked on from above). */
 function groundH(x, z, ref = S.group.position.y + (sim.rise || 0)) {
-  let h = Math.max(roughH(x, z), propH(x, z, ref));
-  // A: 15 deg ramp up -> platform -> stairs down (x -22..-18)
-  if (x >= -22 && x <= -18) {
-    if (z >= 0 && z < 5.6) h = Math.max(h, z * TAN15);
-    else if (z >= 5.6 && z <= 8.4) h = Math.max(h, 1.5);
-    else if (z > 8.4 && z < 11.4) h = Math.max(h, 1.5 - (Math.floor((z - 8.4) / 0.3) + 1) * 0.15);
-  }
-  // B: stairs up -> platform -> steep 25 deg slope down (x -28..-24)
-  if (x >= -28 && x <= -24) {
-    if (z >= 0 && z < 3) h = Math.max(h, Math.min(1.5, (Math.floor(z / 0.3) + 1) * 0.15));
-    else if (z >= 3 && z <= 5) h = Math.max(h, 1.5);
-    else if (z > 5 && z < 5 + 1.5 / TAN25) h = Math.max(h, 1.5 - (z - 5) * TAN25);
-  }
-  return h;
+  return Math.max(MAP.terrainH(x, z), propH(x, z, ref));
 }
-const course = new THREE.Group();
+// viewer decor: rocks and scrub that scroll past while a locomotion clip plays in the viewer
+const props = new THREE.Group(); props.visible = false;
 {
-  const concrete = new THREE.MeshStandardMaterial({ color: '#9a948a', flatShading: true, roughness: 0.95 });
-  const edgeMat = new THREE.MeshStandardMaterial({ color: '#7f796f', flatShading: true, roughness: 0.95 });
-  const dirt = new THREE.MeshStandardMaterial({ color: '#7d7556', flatShading: true, roughness: 1 });
-  const box = (x0, x1, z0, z1, h, m = concrete) => {
-    if (h <= 0.001) return;
-    const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, h, z1 - z0), m);
-    b.position.set((x0 + x1) / 2, h / 2, (z0 + z1) / 2); course.add(b);
-  };
-  const wedge = (x0, x1, z0, z1, hz0, hz1) => { // solid block with a slanted top: hz0 at z0 -> hz1 at z1
-    const g = new THREE.BoxGeometry(x1 - x0, 1, z1 - z0);
-    const pa = g.attributes.position;
-    for (let i = 0; i < pa.count; i++) {
-      const lz = pa.getZ(i) + (z1 - z0) / 2, t = lz / (z1 - z0);
-      pa.setY(i, pa.getY(i) > 0 ? hz0 + (hz1 - hz0) * t : 0);
-    }
-    g.translate((x0 + x1) / 2, 0, (z0 + z1) / 2);
-    g.computeVertexNormals();
-    course.add(new THREE.Mesh(g, concrete));
-  };
-  // A
-  wedge(-22, -18, 0, 5.6, 0, 1.5); box(-22, -18, 5.6, 8.4, 1.5);
-  for (let i = 0; i < 10; i++) box(-22, -18, 8.4 + i * 0.3, 8.7 + i * 0.3, 1.5 - (i + 1) * 0.15, i % 2 ? concrete : edgeMat);
-  // B
-  for (let i = 0; i < 10; i++) box(-28, -24, i * 0.3, (i + 1) * 0.3, (i + 1) * 0.15, i % 2 ? concrete : edgeMat);
-  box(-28, -24, 3, 5, 1.5); wedge(-28, -24, 5, 5 + 1.5 / TAN25, 1.5, 0);
-  // uneven ground patch
-  const pg = new THREE.PlaneGeometry(9, 32, 54, 192); pg.rotateX(-Math.PI / 2); pg.translate(-35.5, 0, 10);
-  const pa = pg.attributes.position;
-  for (let i = 0; i < pa.count; i++) pa.setY(i, roughH(pa.getX(i), pa.getZ(i)) + 0.003);
-  pg.computeVertexNormals();
-  course.add(new THREE.Mesh(pg, dirt));
-  course.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-}
-scene.add(course);
-
-// scattered low-poly props (for the play mode / sense of motion)
-const props = new THREE.Group();
-{
-  const mat = new THREE.MeshStandardMaterial({ color: '#8d8a7c', flatShading: true, roughness: 1 });
-  const crate = new THREE.MeshStandardMaterial({ color: '#7a6847', flatShading: true, roughness: 0.9 });
+  const rockM = new THREE.MeshStandardMaterial({ color: '#a78b68', flatShading: true, roughness: 1 });
+  const bushM = new THREE.MeshStandardMaterial({ color: '#7f7a4c', flatShading: true, roughness: 1 });
   let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let i = 0; i < 70; i++) {
-    const r = 6 + rnd() * 40, a = rnd() * Math.PI * 2;
-    if (inCourse(Math.cos(a) * r, Math.sin(a) * r) || inPark(Math.cos(a) * r, Math.sin(a) * r)) { rnd(); rnd(); continue; } // keep the test course and the jump park clear
-    const m = i % 3 === 0
-      ? new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), crate)
-      : new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + rnd() * 0.7, 0), mat);
-    m.position.set(Math.cos(a) * r, i % 3 === 0 ? 0.5 : 0.1, Math.sin(a) * r);
-    m.rotation.y = rnd() * 6;
-    m.castShadow = m.receiveShadow = true;
-    props.add(m);
-  }
-  // jump park: stepping platforms (0.25 m can be stepped onto; 0.5 - 0.8 m need a jump, 0.95 m a
-  // running jump) and rocks of different heights. Everything is solid and can be stood on.
-  {
-    const slab = (h) => new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.1, 0.06, 0.42 + h * 0.2), flatShading: true, roughness: 0.95 });
-    for (const [x, z, w, d, h] of [
-      [10, 2, 2.5, 2.5, 0.25], [13, 2, 2.5, 2.5, 0.5], [16, 2, 2.5, 2.5, 0.65], [19, 2, 2.5, 2.5, 0.8],
-      [10, 7, 3, 3, 0.5], [14.5, 7, 2, 2, 0.7], [18, 7, 2, 2, 0.95], [21.5, 7, 2.5, 2.5, 0.6],
-      [15, -2.5, 6, 2, 0.4], [21, -2.5, 3, 2, 0.8],
-    ]) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), slab(h));
-      m.position.set(x, h / 2, z); m.castShadow = m.receiveShadow = true; props.add(m);
-    }
-    const rockMat = new THREE.MeshStandardMaterial({ color: '#8f8b7c', flatShading: true, roughness: 1 });
-    for (const [x, z, R, top] of [[10.5, 11.5, 0.7, 0.55], [13.5, 11.5, 0.9, 0.75], [16.5, 11.5, 0.8, 0.6], [19.5, 11.5, 1.0, 0.85], [22.5, 11.5, 0.75, 0.5]]) {
-      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(R, 0), rockMat);
-      m.position.set(x, top - 0.9 * R, z); m.rotation.y = x; // top vertex pair sits at about 0.93 R above the centre
-      m.castShadow = m.receiveShadow = true; props.add(m);
-    }
-  }
-  // range targets downrange
-  const tmat = new THREE.MeshStandardMaterial({ color: '#d8d2bf', flatShading: true });
-  const dark = new THREE.MeshStandardMaterial({ color: '#2b2b2b', flatShading: true });
-  for (let i = -2; i <= 2; i++) {
-    const t = new THREE.Group();
-    const board = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.03), tmat);
-    board.position.y = 1.35; t.add(board);
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 10), dark);
-    ring.rotation.x = Math.PI / 2; ring.position.set(0, 1.45, 0.005); t.add(ring);
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, 0.05), crate);
-    post.position.y = 0.5; t.add(post);
-    t.position.set(i * 2.2, 0, 22);
-    t.traverse((o) => { o.castShadow = true; });
-    props.add(t);
+    const r = 5 + rnd() * 40, a = rnd() * Math.PI * 2, rock = rnd() < 0.4, sz = rock ? 0.3 + rnd() * 0.7 : 0.25 + rnd() * 0.5;
+    const g = rock ? new THREE.DodecahedronGeometry(sz, 0) : new THREE.IcosahedronGeometry(sz, 0);
+    g.scale(1.1, rock ? 0.7 : 0.55, 1);
+    const m = new THREE.Mesh(g, rock ? rockM : bushM);
+    m.position.set(Math.cos(a) * r, sz * 0.3, Math.sin(a) * r); m.rotation.y = rnd() * 6;
+    m.castShadow = m.receiveShadow = true; props.add(m);
   }
 }
 scene.add(props);
+props.visible = true; MAP.root.visible = false; // the viewer starts with just the soldier on the sand
 
-// low walls to vault in play mode (1.0 m high, 25 cm thick, as authored in the Vault clip)
-const WALLS = [];
-{
-  const mat = new THREE.MeshStandardMaterial({ color: '#8a8478', flatShading: true, roughness: 0.95 });
-  const cap = new THREE.MeshStandardMaterial({ color: '#a39d90', flatShading: true });
-  for (const [x, z, yaw, w] of [[0, 7, 0, 2.6], [-5, 13, 0.35, 3.0], [6, 4, -0.7, 2.4], [2, 16, 0.1, 3.2], [-7, 3, 1.2, 2.4]]) {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, 0.96, 0.25), mat); body.position.y = 0.48;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(w + 0.04, 0.04, 0.29), cap); top.position.y = 0.98;
-    g.add(body, top); g.position.set(x, 0, z); g.rotation.y = yaw;
-    g.traverse((o) => { o.castShadow = o.receiveShadow = true; });
-    props.add(g);
-    WALLS.push({ g, x, z, yaw, half: w / 2 });
-  }
-}
-// ------------------------------------------------------------------ hit boxes (collision)
-// Every prop gets a collider: boxes (crates, walls) as oriented boxes, rocks as circles,
-// target posts as thin circles. B toggles a wireframe view of them.
-const COLLIDERS = [];
-{
-  props.updateMatrixWorld(true);
-  for (const o of props.children) {
-    if (o.isMesh && o.geometry.type === 'BoxGeometry') {
-      const q = o.geometry.parameters;
-      COLLIDERS.push({ type: 'box', x: o.position.x, z: o.position.z, hx: q.width / 2, hz: q.depth / 2, yaw: o.rotation.y, top: o.position.y + q.height / 2, bot: o.position.y - q.height / 2 });
-    } else if (o.isMesh && o.geometry.type === 'DodecahedronGeometry') {
-      const r = o.geometry.parameters.radius;
-      COLLIDERS.push({ type: 'circle', x: o.position.x, z: o.position.z, r: r * 0.92, top: o.position.y + r, base: o.position.y, R: r });
-    } else if (o.isGroup) {
-      const w = WALLS.find((wl) => wl.g === o);
-      if (w) COLLIDERS.push({ type: 'box', x: w.x, z: w.z, hx: w.half + 0.02, hz: 0.145, yaw: w.yaw, top: 1.0 });
-      else COLLIDERS.push({ type: 'circle', x: o.position.x, z: o.position.z, r: 0.06, top: 1.7 }); // target post
-    }
-  }
-}
-// ------------------------------------------------------------------ structures: building and ladder tower
-// A two-storey building (door, an internal staircase up to the second floor, ribbon windows) and a
-// 10 m tower with a vertical ladder, north-east of the spawn point. Every solid is a collider, and
-// floors are walkable surfaces at their own heights (groundH picks the one at the soldier's level).
-const structures = new THREE.Group(); scene.add(structures);
-const LADDERS = [];
-function addSolid(x0, x1, y0, y1, z0, z1, mat, walk = false, visible = true) {
-  let m = null;
-  if (visible) { // (an invisible collider gets no mesh, so bullets and the camera pass through it)
-    m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat);
-    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true;
-    structures.add(m);
-  }
-  COLLIDERS.push({ type: 'box', x: (x0 + x1) / 2, z: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, yaw: 0, top: y1, bot: y0, walk });
-  return m;
-}
-{
-  const wall = new THREE.MeshStandardMaterial({ color: '#a39d90', flatShading: true, roughness: 0.95 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#7f796f', flatShading: true, roughness: 0.95 });
-  const floor = new THREE.MeshStandardMaterial({ color: '#8a7a5c', flatShading: true, roughness: 0.9 });
-  const steel = new THREE.MeshStandardMaterial({ color: '#5d6468', flatShading: true, roughness: 0.6, metalness: 0.3 });
-  // building: inner room x 31..39, z 8..14; floors at 0 and 3.0 m; roof at 6.0 m
-  const X0 = 31, X1 = 39, Z0 = 8, Z1 = 14, T = 0.25, H2 = 3.0, HR = 6.0;
-  // south wall with a door (x 32.3 .. 33.7, 2.2 m high)
-  addSolid(X0 - T, 32.3, 0, HR, Z0 - T, Z0, wall); addSolid(33.7, X1 + T, 0, HR, Z0 - T, Z0, wall);
-  addSolid(32.3, 33.7, 2.2, HR, Z0 - T, Z0, dark);
-  // north, west and east walls: solid to 3.9 m, then a ribbon window (3.9 - 5.1 m), then a top band
-  for (const [a0, a1, b0, b1] of [[X0 - T, X1 + T, Z1, Z1 + T], [X0 - T, X0, Z0, Z1], [X1, X1 + T, Z0, Z1]]) {
-    addSolid(a0, a1, 0, 3.9, b0, b1, wall); addSolid(a0, a1, 5.1, HR, b0, b1, wall);
-  }
-  // corner posts through the window band, and the roof slab
-  for (const [cx, cz] of [[X0 - T, Z0 - T], [X1, Z0 - T], [X0 - T, Z1], [X1, Z1]]) addSolid(cx, cx + T, 3.9, 5.1, cz, cz + T, dark);
-  addSolid(X0 - T - 0.2, X1 + T + 0.2, HR, HR + 0.25, Z0 - T - 0.2, Z1 + T + 0.2, dark);
-  // second floor with a stairwell opening over the stairs (x 37.1 .. 38.9, z 8.8 .. 12.5, so there is headroom all the way up the flight)
-  addSolid(X0, 37.1, H2 - 0.2, H2, Z0, Z1, floor);
-  addSolid(37.1, X1, H2 - 0.2, H2, Z0, 8.8, floor);
-  addSolid(37.1, X1, H2 - 0.2, H2, 12.5, Z1, floor);
-  // internal staircase along the east wall: 15 treads, 0.2 m rise x 0.28 m run, 1.4 m wide
-  // (treads are walkable surfaces without a collision wall of their own, like the test course stairs;
-  // a stringer wall keeps him on the flight)
-  for (let i = 0; i < 15; i++) addSolid(37.4, 38.8, 0, (i + 1) * 0.2, Z0 + 0.4 + i * 0.28, Z0 + 0.4 + (i + 1) * 0.28, i % 2 ? dark : wall, true);
-  // open on the west side so the flight can be seen and entered; from the fourth tread up (above 0.8 m)
-  // an invisible banister keeps him on the stairs, with a visible handrail on posts
-  for (let i = 3; i < 15; i++) addSolid(37.2, 37.4, 0, (i + 1) * 0.2 + 1.0, Z0 + 0.4 + i * 0.28, Z0 + 0.4 + (i + 1) * 0.28, dark, false, false);
-  {
-    const zA = Z0 + 0.4 + 3 * 0.28, zB = Z0 + 0.4 + 15 * 0.28, yA = 0.8 + 0.95, yB = 3.0 + 0.95;
-    const len = Math.hypot(zB - zA, yB - yA), rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, len), steel);
-    rail.position.set(37.3, (yA + yB) / 2, (zA + zB) / 2); rail.rotation.x = -Math.atan2(yB - yA, zB - zA); structures.add(rail);
-    for (let i = 3; i < 15; i += 2) {
-      const h = (i + 1) * 0.2 + 0.95, post = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.05), steel);
-      post.position.set(37.3, h / 2, Z0 + 0.4 + (i + 0.5) * 0.28); structures.add(post);
-    }
-  }
-  // lights, so the interior reads: one on each floor
-  for (const y of [2.5, 5.5]) { const l = new THREE.PointLight('#ffe9c7', 14, 11, 1.6); l.position.set(35, y, 11); structures.add(l); }
-  // tower: four legs and a 4 x 4 m platform whose top is 10 m up, centre (42, 24)
-  const TX = 42, TZ = 24, TH = 10.0;
-  for (const sx of [-1.7, 1.7]) for (const sz of [-1.7, 1.7]) addSolid(TX + sx - 0.15, TX + sx + 0.15, 0, TH - 0.3, TZ + sz - 0.15, TZ + sz + 0.15, steel);
-  addSolid(TX - 2, TX + 2, TH - 0.3, TH, TZ - 2, TZ + 2, floor);
-  // low parapet on the three sides without the ladder (visual and solid)
-  addSolid(TX - 2, TX + 2, TH, TH + 1.0, TZ + 1.9, TZ + 2, steel);
-  addSolid(TX - 2, TX - 1.9, TH, TH + 1.0, TZ - 2, TZ + 1.9, steel); addSolid(TX + 1.9, TX + 2, TH, TH + 1.0, TZ - 2, TZ + 1.9, steel);
-  // cross braces (visual only)
-  for (const sz of [-1.7, 1.7]) for (const [y0, y1] of [[0.4, 4.4], [4.4, 8.4]]) {
-    for (const dir of [1, -1]) {
-      const len = Math.hypot(3.4, y1 - y0);
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, len, 0.08), steel);
-      b.position.set(TX, (y0 + y1) / 2, TZ + sz); b.rotation.z = dir * Math.atan2(3.4, y1 - y0);
-      structures.add(b);
-    }
-  }
-  // the ladder on the south face (soldier faces +z): rails and rungs every 0.3 m, rungs at 0.04 + 0.3 k
-  const LZ = TZ - 2 - 0.12, LX = TX, LBASE = 0;
-  for (const sx of [-0.27, 0.27]) {
-    const r = new THREE.Mesh(new THREE.BoxGeometry(0.06, TH + 1.1, 0.06), steel); r.position.set(LX + sx, (TH + 1.1) / 2, LZ); structures.add(r);
-  }
-  for (let k = 0; LBASE + 0.04 + 0.3 * k < TH + 0.9; k++) {
-    const rg = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.54, 6), steel);
-    rg.rotation.z = Math.PI / 2; rg.position.set(LX, LBASE + 0.04 + 0.3 * k, LZ); structures.add(rg);
-  }
-  // standoff brackets to the platform edge
-  for (const y of [1.5, 4, 6.5, 9.2]) for (const sx of [-0.27, 0.27]) {
-    const br = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.12), steel); br.position.set(LX + sx, y, LZ + 0.06); structures.add(br);
-  }
-  LADDERS.push({ x: LX, rungZ: LZ, base: LBASE, top: TH, hipZ: LZ - 0.42, platformZ: TZ - 2 + 0.9 });
-}
 const colliderViz = new THREE.Group(); colliderViz.visible = false; scene.add(colliderViz);
 {
   const lm = new THREE.LineBasicMaterial({ color: '#ff5a36' });
@@ -317,11 +79,25 @@ const colliderViz = new THREE.Group(); colliderViz.visible = false; scene.add(co
   }
 }
 const BODY_R = 0.32, STEP_MAX = 0.45;
+// spatial grid over the colliders (8 m cells) so ground and collision queries stay cheap on a big map
+const GRID = new Map(), CELL = 8, NOCOLL = [];
+const gkey = (ix, iz) => ix * 65536 + iz;
+for (const c of COLLIDERS) {
+  let ex, ez;
+  if (c.type === 'box') { const cs = Math.abs(Math.cos(c.yaw)), sn = Math.abs(Math.sin(c.yaw)); ex = cs * c.hx + sn * c.hz; ez = sn * c.hx + cs * c.hz; } else ex = ez = c.r;
+  ex += 0.6; ez += 0.6;
+  for (let ix = Math.floor((c.x - ex) / CELL); ix <= Math.floor((c.x + ex) / CELL); ix++) {
+    for (let iz = Math.floor((c.z - ez) / CELL); iz <= Math.floor((c.z + ez) / CELL); iz++) {
+      const k = gkey(ix, iz); if (!GRID.has(k)) GRID.set(k, []); GRID.get(k).push(c);
+    }
+  }
+}
+const nearColliders = (x, z) => GRID.get(gkey(Math.floor(x / CELL), Math.floor(z / CELL))) || NOCOLL;
 /** Height of the solid prop surface under (x, z), 0 if none: box tops, and a dome over each rock. */
 function propH(x, z, ref = 0) {
   let h = 0;
   const lim = ref + STEP_MAX + 0.02;
-  for (const c of COLLIDERS) {
+  for (const c of nearColliders(x, z)) {
     if (c.type !== 'circle' && c.top > lim) continue; // too high to stand on from here
     const dx = x - c.x, dz = z - c.z;
     if (c.type === 'circle') {
@@ -340,7 +116,7 @@ function propH(x, z, ref = 0) {
 }
 function collide(p) {
   for (let it = 0; it < 3; it++) {
-    for (const c of COLLIDERS) {
+    for (const c of nearColliders(p.x, p.z)) {
       if (c.walk) continue;
       const dx = p.x - c.x, dz = p.z - c.z;
       if (dx * dx + dz * dz > 25) continue;
@@ -423,7 +199,6 @@ const HITBOXES = [];
 }
 const _bp = new THREE.Vector3();
 function updateHitViz() {
-  colliderViz.position.copy(props.position); // the viewer scrolls the props past the soldier
   if (!hitViz.visible) return;
   S.group.updateMatrixWorld(true);
   for (const h of HITBOXES) { h.l.matrix.multiplyMatrices(S.bones[h.bone].matrixWorld, h.local); h.l.matrixWorldNeedsUpdate = true; }
@@ -465,7 +240,7 @@ for (const [fire, ref] of [['ADS_Fire_Auto', 'ADS_Pose'], ['HipFire_Fire_Auto', 
 }
 
 // ------------------------------------------------------------------ cameras
-const camera = new THREE.PerspectiveCamera(40, 1, 0.02, 300);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.02, 1600);
 camera.position.set(-2.4, 1.7, 3.0);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.05, 0.2);
@@ -542,15 +317,17 @@ function fireEffects() {
     bore.addScaledVector(side, Math.cos(a) * Math.tan(r)).addScaledVector(up, Math.sin(a) * Math.tan(r)).normalize();
     mq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), bore);
   }
-  const hit = castRay(mp, bore);
-  lastShot = { from: mp.clone(), dir: bore.clone(), hit: hit.point.clone(), t: performance.now() };
+  let hit = castRay(mp, bore);
+  // glass shatters and the round carries on; range targets fall back
+  for (let n = 0; n < 4 && hit.object && MAP.onHit(hit, bore); n++) hit = castRay(hit.point.clone().addScaledVector(bore, 0.02), bore);
+  lastShot = { from: mp.clone(), dir: bore.clone(), hit: hit.point.clone(), t: performance.now(), target: !!(hit.object && hit.object.userData.target) };
   if (Math.random() < 0.34) {
     const tr = new THREE.Mesh(tracerGeo, tracerMat.clone());
     tr.position.copy(mp); tr.quaternion.copy(mq);
     fx.add(tr);
     live.push({ o: tr, life: Math.min(0.35, hit.distance / 160), t: 0, vel: bore.clone().multiplyScalar(160) });
   }
-  if (hit.object) impact(hit);
+  if (hit.object && !hit.object.userData.target) impact(hit);
   // shell casing: ejected right, up and slightly back
   const ep = new THREE.Vector3(), eq = new THREE.Quaternion();
   ejectNode.getWorldPosition(ep); ejectNode.getWorldQuaternion(eq);
@@ -571,7 +348,7 @@ const raycaster = new THREE.Raycaster();
 let lastShot = null;
 function castRay(origin, dir, far = 400) {
   raycaster.set(origin, dir); raycaster.far = far;
-  const h = raycaster.intersectObjects([ground, props, course, structures], true)[0];
+  const h = raycaster.intersectObjects([ground, MAP.root], true)[0];
   return h ? { point: h.point, distance: h.distance, object: h.object, normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0) }
     : { point: origin.clone().addScaledVector(dir, far), distance: far, object: null };
 }
@@ -802,7 +579,7 @@ function setMode(m) {
   if (m === 'play') {
     sim.rig = null; sim.yaw = sim.camYaw = 0; sim.jumping = false; sim.vault = null; sim.pendingLeap = null; sim.aim = 'none'; sim.lastAim = 'none'; sim.fire = false;
     sim.god = false; sim.posture = 'stand'; sim.wantPosture = null; sim.postureClip = null; sim.feetYaw = null; sim.turnStep = null; sim.pelvisDrop = 0; sim.falling = false; sim.vy = 0;
-    viewerWall.visible = false;
+    viewerWall.visible = false; MAP.root.visible = true; props.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     document.activeElement?.blur?.();
     groundScroll = 0; groundScrollX = 0; gtex.offset.set(0, 0); props.position.set(0, 0, 0);
@@ -810,6 +587,7 @@ function setMode(m) {
     renderer.domElement.requestPointerLock?.();
   } else {
     document.exitPointerLock?.();
+    MAP.root.visible = false; props.visible = true; colliderViz.visible = false; hitViz.visible = false;
     S.group.position.set(0, 0, 0); S.group.rotation.set(0, 0, 0);
     for (const a of Object.values(additive)) a.stop();
     play('Idle', 0.2);
@@ -1405,7 +1183,7 @@ function updatePlayCamera(dt) {
   { // keep the camera out of walls and ceilings: pull it in along the line from the pivot
     const to = want.clone().sub(pivot), dist = to.length();
     raycaster.set(pivot, to.clone().divideScalar(dist)); raycaster.far = dist;
-    const hit = raycaster.intersectObjects([props, course, structures], true)[0];
+    const hit = raycaster.intersectObjects(MAP.statics, false)[0];
     if (hit) want.copy(pivot).addScaledVector(to.divideScalar(dist), Math.max(0.35, hit.distance - 0.25));
   }
   camera.position.lerp(want, 1 - Math.exp(-dt * 14));
@@ -1445,6 +1223,7 @@ function frame() {
   if (ikFix && !sim.ladder) leftHandIK();
   updateHitViz();
   updateHint();
+  if (mode === 'play') MAP.update(Math.min(0.05, dt));
   if (mode === 'play') {
     if (sim.eye) updatePlayCamera(dt); // the optic view follows the final, aimed rifle
     while (sim.pendingShots > 0) { fireEffects(); sim.pendingShots--; }
@@ -1485,7 +1264,7 @@ function frame() {
   }
   if (mode !== 'play') controls.update();
   updateEffects(dt);
-  sun.position.copy(S.group.position).add(new THREE.Vector3(4, 8, 5));
+  sun.position.copy(S.group.position).add(new THREE.Vector3(28, 55, 20));
   sun.target.position.copy(S.group.position);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
@@ -1510,6 +1289,6 @@ if (params.has('t')) {
   if (current.getClip().userData.speed) props.position.z = 0;
 }
 if (params.has('noui')) document.body.classList.add('noui');
-window.__dbg = { sim, camera, S, actions, scene, structures, aim: _aim, boreRay, lastShot: () => lastShot };
+window.__THREE = THREE; window.__dbg = { MAP, sim, camera, S, actions, scene, structures, aim: _aim, boreRay, lastShot: () => lastShot };
 requestAnimationFrame(frame);
 setTimeout(() => { window.__done = true; }, 400);

@@ -157,6 +157,18 @@ npm run validate
 npm run export
 ```
 
-## Test course
+## Test map: desert military base
 
-Play mode has a test course around the spawn point: stairs, ramps, a steep slope and uneven ground to the west; a **jump park** to the east (stepping platforms 0.25 - 0.95 m high and rocks 0.5 - 0.85 m high, all solid and walkable on top: a 0.25 m platform can be stepped onto, higher ones need a jump, and a standing jump at a platform within reach carries him up onto it); and to the north-east a **two-storey building** (door, internal staircase up to the second floor with ribbon windows, roof) and a **10 m tower with a vertical ladder** up to a platform. Floors are walkable surfaces at their own heights, so the ground floor, the stairs and the second floor all work, and the camera is kept out of walls.
+Play mode takes place on a desert military base (`src/map.js`), about 460 x 425 m inside the wire, with dunes beyond. You spawn at the main road junction facing north.
+
+* **Airfield (north):** a 400 m runway with markings and end lights, a taxiway, a concrete apron, two open-fronted hangars (one with a light aircraft inside) and a control tower whose glazed cab you reach by the ladder on its south face.
+* **Helipad (north-east):** marked pad with edge lights, a parked utility helicopter, a windsock and HESCO walls.
+* **Vehicle park (east):** concrete hard standing with cargo trucks, patrol vehicles and wheeled APCs, two workshops with open bays, an office, benches and a vehicle on the lift, a fuel point inside a HESCO bund, and a container yard.
+* **MOUT village (west):** a walled compound for building-clearance drills. The 1 m compound walls can be vaulted. Inside are a three-room house, a two-storey house with an internal stair, a corridor building with five rooms, and huts. Every building has doorways and glass windows.
+* **Firing range (south-west):** a covered firing point with benches and sandbags, six lanes with targets at 25, 50 and 100 m that fall when hit and pop back up after 3 s, side berms, a stop butt, a range flag and a control hut.
+* **Perimeter:** chain-link fence with barbed wire, a south gate with a HESCO chicane, sandbagged sangars and a boom barrier, and eight lookout towers (6 m platforms with sandbag parapets and roofs) that you climb by ladder.
+* **Also:** HQ / accommodation blocks with glazed windows, a flagpole, a water tower, sandbag positions, scrub and rocks.
+
+![Base tour](docs/images/base_tour.png)
+
+Glass windows shatter when shot and the round carries on through. Every solid is a collider, and floors, stairs, roofs and platforms are walkable at their own heights. The camera is kept out of walls. The viewer shows the soldier alone on the sand.
