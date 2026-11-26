@@ -199,22 +199,35 @@ function buildLeg(B, side) {
   B.box(V(at(0.51), 0.505, 0.062 * BUILD.leg), [0.085 * BUILD.leg, 0.10, 0.03], 'pad', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]), { taperTop: [0.9, 1], taperBottom: [0.85, 1] });
   B.box(V(at(0.51), 0.505, 0.079 * BUILD.leg), [0.06 * BUILD.leg, 0.07, 0.01], 'black', wm([`${P}Leg`, 0.85], [`${P}UpLeg`, 0.15]));
 
-  // boot upper
+  // boot shaft: rounded (12-sided) tube from the padded collar down to the ankle, flaring slightly
   const bootRows = [
+    [0.226, 0.058, 0.064, 0.000, w1(`${P}Leg`)],
     [0.215, 0.054, 0.060, 0.000, w1(`${P}Leg`)],
     [0.14, 0.054, 0.062, 0.000, wm([`${P}Leg`, 0.7], [`${P}Foot`, 0.3])],
     [0.095, 0.055, 0.068, 0.006, wm([`${P}Leg`, 0.25], [`${P}Foot`, 0.75])],
   ];
-  const brings = bootRows.map(([y, rx, rz, zo]) => frameRing(V(ank.x, y, zo), down, sx, rx * BUILD.boot, rz * BUILD.boot, 8, { phase: Math.PI / 8 }));
+  const brings = bootRows.map(([y, rx, rz, zo]) => frameRing(V(ank.x, y, zo), down, sx, rx * BUILD.boot, rz * BUILD.boot, 12, { phase: Math.PI / 12 }));
   B.loft(brings, 'boot', bootRows.map((r) => r[4]), { capStart: true, capEnd: false });
-  // foot body (heel to ball) and toe box
+  // foot: one continuous rounded loft from the heel to the toe (rounded heel, instep rising to the
+  // ankle, rounded toe), with a matching sole and a deeper heel block
   const F = w1(`${P}Foot`), T = w1(`${P}ToeBase`);
-  B.box(V(ank.x, 0.058, 0.035), [0.098 * BUILD.boot, 0.085, 0.205 * BUILD.boot], 'boot', F, { taperTop: [0.9, 0.8] });
-  B.box(V(ank.x, 0.012, 0.035), [0.104 * BUILD.boot, 0.024, 0.215 * BUILD.boot], 'bootSole', F);
-  B.box(V(ank.x, 0.044, 0.18 + 0.005), [0.094 * BUILD.boot, 0.060, 0.09 * BUILD.boot], 'boot', T, { taperTop: [0.85, 0.7] });
-  B.box(V(ank.x, 0.012, 0.18 + 0.005), [0.100 * BUILD.boot, 0.024, 0.095 * BUILD.boot], 'bootSole', T);
-  // laces strip
-  B.box(V(ank.x, 0.105, 0.075), [0.03, 0.012, 0.09], 'bootSole', F, { quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.45, 0, 0)) });
+  const footStations = [ // z, half width, upper centre y, upper half height, sole centre y, sole half height
+    [-0.083, 0.014, 0.052, 0.020, 0.017, 0.017],
+    [-0.074, 0.030, 0.054, 0.030, 0.017, 0.017],
+    [-0.058, 0.044, 0.057, 0.036, 0.017, 0.017],
+    [-0.030, 0.050, 0.058, 0.038, 0.016, 0.016],
+    [0.020, 0.052, 0.060, 0.038, 0.012, 0.012],
+    [0.070, 0.052, 0.057, 0.036, 0.012, 0.012],
+    [0.120, 0.0505, 0.050, 0.033, 0.012, 0.012],
+    [0.135, 0.050, 0.044, 0.034, 0.012, 0.012],
+    [0.170, 0.0505, 0.043, 0.033, 0.012, 0.012], [0.200, 0.0485, 0.041, 0.031, 0.012, 0.012],
+    [0.224, 0.043, 0.038, 0.028, 0.012, 0.012], [0.241, 0.034, 0.034, 0.023, 0.012, 0.012],
+    [0.251, 0.022, 0.030, 0.016, 0.012, 0.012], [0.256, 0.010, 0.026, 0.009, 0.012, 0.012],
+  ];
+  const fw = footStations.map(([z]) => (z < 0.13 ? F : T));
+  const fRing = (z, hw, yc, hh, grow = 0) => frameRing(V(ank.x, yc, z), V(0, 0, 1), V(1, 0, 0), (hw + grow) * BUILD.boot, hh, 14, { phase: Math.PI / 14 });
+  B.loft(footStations.map(([z, hw, yc, hh]) => fRing(z, hw, yc, hh)), 'boot', fw, { capStart: true, capEnd: true });
+  B.loft(footStations.map(([z, hw, , , sy, sh]) => fRing(z, hw, sy, sh, 0.004)), 'bootSole', fw, { capStart: true, capEnd: true });
 }
 
 // ------------------------------------------------------------------------- arms
@@ -252,37 +265,61 @@ function buildHand(B, side) {
   const P = side;
   const wr = BW[`${P}Hand`];
   const H = w1(`${P}Hand`);
-  // palm block (wrist -> knuckles)
-  B.box(V((wr.x + 0.050 * s), wr.y - 0.002, wr.z + 0.004), [0.096, 0.030, 0.086], 'glove', H, { taperTop: [1, 0.95] });
-  // knuckle armour
-  B.box(V((wr.x + 0.075 * s), wr.y + 0.017, wr.z + 0.004), [0.03, 0.008, 0.07], 'gloveLight', H);
-  // thenar pad (base of thumb)
-  B.box(V((wr.x + 0.030 * s), wr.y - 0.008, wr.z + 0.034), [0.05, 0.026, 0.03], 'glove', H);
-  const seg = (a, b, r, bone, col = 'glove', w = r) => {
-    const pa = BW[a], pb = b instanceof THREE.Vector3 ? b : BW[b];
-    B.cylinder(pa, pb, r, w, col, w1(bone), { n: 6, roll: Math.PI / 6 });
-  };
+  const ax = V(s, 0, 0), zs = V(0, 0, 1);
+  // palm: rounded loft from the wrist to the knuckles
+  const palmRows = [[0.010, 0.040, 0.017], [0.040, 0.045, 0.0165], [0.070, 0.0475, 0.0150], [0.094, 0.0475, 0.0125]];
+  const palm = palmRows.map(([dx, hz, hy]) => frameRing(V(wr.x + dx * s, wr.y - 0.002, wr.z - 0.0015), ax, zs, hz, hy, 10, { phase: Math.PI / 10 }));
+  B.loft(palm, 'glove', palmRows.map(() => H), { capStart: false, capEnd: true });
+  // knuckle armour (back of the hand) and the thenar pad at the base of the thumb
+  B.box(V(wr.x + 0.080 * s, wr.y + 0.015, wr.z - 0.0015), [0.026, 0.008, 0.086], 'gloveLight', H, { taperTop: [1, 0.9] });
+  B.ellipsoid(V(wr.x + 0.034 * s, wr.y - 0.010, wr.z + 0.030), [0.026, 0.014, 0.020], 'glove', H, { w: 8, h: 5 });
   const ext = (name, len) => {
     const p = BW[name], par = BW[PARENT[name]];
     return p.clone().add(p.clone().sub(par).normalize().multiplyScalar(len));
   };
-  // index: 3 phalanges
-  seg(`${P}HandIndex1`, `${P}HandIndex2`, 0.0105, `${P}HandIndex1`);
-  seg(`${P}HandIndex2`, `${P}HandIndex3`, 0.0098, `${P}HandIndex2`);
-  seg(`${P}HandIndex3`, ext(`${P}HandIndex3`, 0.024), 0.0092, `${P}HandIndex3`, 'glove', 0.0075);
-  // middle/ring/little block: flattened wide prism
-  const blk = (a, b, bone, w, h) => {
-    const pa = BW[a], pb = b instanceof THREE.Vector3 ? b : BW[b];
-    const c = pa.clone().add(pb).multiplyScalar(0.5);
-    B.box(c, [Math.abs(pb.x - pa.x) + 0.006, h, w], 'glove', w1(bone));
+  // A finger is one smooth loft through its three phalanges: slightly swollen at each joint,
+  // tapering and closing into a rounded fingertip. Weights blend across the joints.
+  const finger = (nodes, bones, radii, flat = 0.9) => {
+    // nodes: base, joint 2, joint 3, tip (4 points); bones: 3 bone names; radii: base, j2, j3, tip
+    const stations = []; // [position, radius scale, weights]
+    const wj = (i) => (i === 0 ? w1(bones[0]) : wm([bones[i - 1], 0.5], [bones[i], 0.5]));
+    for (let k = 0; k < 3; k++) {
+      const a = nodes[k], b = nodes[k + 1];
+      const r0 = radii[k], r1 = radii[k + 1];
+      stations.push([a.clone(), r0 * (k ? 1.06 : 1.0), k ? wj(k) : w1(bones[0])]);
+      stations.push([a.clone().lerp(b, 0.45), (r0 + r1) * 0.5 * 0.97, w1(bones[k])]);
+      stations.push([a.clone().lerp(b, 0.82), (r0 + r1) * 0.5 * 0.97, w1(bones[k])]);
+    }
+    stations.push([nodes[3].clone(), radii[3], w1(bones[2])]);
+    const nose = nodes[3].clone().add(nodes[3].clone().sub(nodes[2]).normalize().multiplyScalar(radii[3] * 0.55));
+    stations.push([nose, radii[3] * 0.55, w1(bones[2])]);
+    const rings = stations.map(([pt, r], i) => {
+      const nxt = stations[Math.min(stations.length - 1, i + 1)][0], prv = stations[Math.max(0, i - 1)][0];
+      return frameRing(pt, nxt.clone().sub(prv), zs, r, r * flat, 8, { phase: Math.PI / 8 });
+    });
+    B.loft(rings, 'glove', stations.map((x) => x[2]), { capStart: false, capEnd: true });
   };
-  blk(`${P}HandMiddle1`, `${P}HandMiddle2`, `${P}HandMiddle1`, 0.056, 0.021);
-  blk(`${P}HandMiddle2`, `${P}HandMiddle3`, `${P}HandMiddle2`, 0.052, 0.019);
-  blk(`${P}HandMiddle3`, ext(`${P}HandMiddle3`, 0.024), `${P}HandMiddle3`, 0.048, 0.017);
-  // thumb
-  seg(`${P}HandThumb1`, `${P}HandThumb2`, 0.0135, `${P}HandThumb1`);
-  seg(`${P}HandThumb2`, `${P}HandThumb3`, 0.0115, `${P}HandThumb2`);
-  seg(`${P}HandThumb3`, ext(`${P}HandThumb3`, 0.024), 0.0105, `${P}HandThumb3`, 'glove', 0.009);
+  // index (own bone chain, so it can lie along or pull the trigger)
+  const I = [1, 2, 3].map((k) => BW[`${P}HandIndex${k}`]);
+  finger([I[0], I[1], I[2], ext(`${P}HandIndex3`, 0.026)], [1, 2, 3].map((k) => `${P}HandIndex${k}`), [0.0105, 0.0098, 0.0092, 0.0085]);
+  // middle, ring and little fingers share the Middle chain (they curl together); each is its own
+  // finger, side by side, with the natural length differences
+  const M = [1, 2, 3].map((k) => BW[`${P}HandMiddle${k}`]);
+  const mTip = ext(`${P}HandMiddle3`, 0.026);
+  const chain = [M[0], M[1], M[2], mTip];
+  const mBones = [1, 2, 3].map((k) => `${P}HandMiddle${k}`);
+  const dz0 = wr.z + 0.003 - M[0].z; // middle finger sits at hz + 0.003
+  for (const [zOff, len, r] of [[0.003, 1.0, 0.0105], [-0.017, 0.94, 0.0098], [-0.036, 0.78, 0.0088]]) {
+    const base = chain[0].clone();
+    const nodes = chain.map((c) => c.clone().sub(base).multiplyScalar(len).add(base));
+    const dz = wr.z + zOff - base.z;
+    nodes.forEach((n) => { n.z += dz; });
+    void dz0;
+    finger(nodes, mBones, [r, r * 0.95, r * 0.9, r * 0.82]);
+  }
+  // thumb: thicker, three phalanges
+  const Th = [1, 2, 3].map((k) => BW[`${P}HandThumb${k}`]);
+  finger([Th[0], Th[1], Th[2], ext(`${P}HandThumb3`, 0.026)], [1, 2, 3].map((k) => `${P}HandThumb${k}`), [0.0140, 0.0125, 0.0112, 0.0102], 0.95);
 }
 
 // ------------------------------------------------------------------------- gear

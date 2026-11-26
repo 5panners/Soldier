@@ -131,21 +131,27 @@ export function buildRifleGeometry() {
   const SY = WEAPON.SIGHT_Y, SZ = WEAPON.SIGHT_Z;
   B.box(V(0, 0.122, SZ), [0.026, 0.016, 0.05], bl, W);
   // open optic tube (caps omitted) + lens rings, so the reticle is visible through it
-  B.cylinder(V(0, SY, SZ - 0.045), V(0, SY, SZ + 0.045), 0.021, 0.022, bl, W, { n: 8, roll: Math.PI / 8, caps: false });
+  // (short and thin so it frames the target without a thick dark ring in the sight picture)
+  B.cylinder(V(0, SY, SZ - 0.009), V(0, SY, SZ + 0.009), 0.0215, 0.0218, bl, W, { n: 12, roll: Math.PI / 12, caps: false });
   const annulus = (z, ro, ri, col, dir) => {
-    const n = 8;
+    const n = 12;
     for (let i = 0; i < n; i++) {
-      const a0 = Math.PI / 8 + (2 * Math.PI * i) / n, a1 = Math.PI / 8 + (2 * Math.PI * (i + 1)) / n;
+      const a0 = Math.PI / 12 + (2 * Math.PI * i) / n, a1 = Math.PI / 12 + (2 * Math.PI * (i + 1)) / n;
       const P = (r, a) => V(Math.cos(a) * r, SY + Math.sin(a) * r, z);
       const q = [P(ro, a0), P(ro, a1), P(ri, a1), P(ri, a0)];
       if (dir > 0) B.quad(q[0], q[1], q[2], q[3], col, W); else B.quad(q[3], q[2], q[1], q[0], col, W);
     }
   };
-  for (const [z, ro, ri] of [[SZ - 0.045, 0.0215, 0.0165], [SZ + 0.045, 0.0225, 0.0175]]) { annulus(z, ro, ri, bl, -1); annulus(z, ro, ri, bl, 1); }
+  for (const [z, ro, ri] of [[SZ - 0.009, 0.0218, 0.0200], [SZ + 0.009, 0.0222, 0.0204]]) { annulus(z, ro, ri, bl, -1); annulus(z, ro, ri, bl, 1); }
   B.box(V(0, SY + 0.024, SZ), [0.012, 0.010, 0.020], bl, W);        // turret top
   B.box(V(-0.023, SY, SZ), [0.010, 0.012, 0.018], bl, W);           // turret side
   // red-dot reticle floating on the optical axis (visible through the rear lens)
-  B.box(V(0, SY, SZ + 0.02), [0.0035, 0.0035, 0.002], 'lensRed', W);
+  { // a small round red dot (12-sided disc facing the shooter)
+    const R = 0.0012, pts = [];
+    for (let i = 0; i < 12; i++) { const a = (2 * Math.PI * i) / 12; pts.push(V(-Math.cos(a) * R, SY + Math.sin(a) * R, SZ)); }
+    B.poly(pts, 'lensRed', W);
+    B.poly([...pts].reverse(), 'lensRed', W);
+  }
   // Sling swivel points
   B.box(V(0.017, 0.075, -0.30), [0.006, 0.02, 0.02], gm, W);
   B.box(V(0.03, BY, 0.43), [0.006, 0.016, 0.016], gm, W);
