@@ -214,24 +214,29 @@ function buildLeg(B, side) {
   // foot: one continuous rounded loft from the heel to the toe (rounded heel, instep rising to the
   // ankle, rounded toe), with a matching sole and a deeper heel block
   const F = w1(`${P}Foot`), T = w1(`${P}ToeBase`);
-  const footStations = [ // z, half width, upper centre y, upper half height, sole centre y, sole half height
-    // chunky flat sole (no raised heel): a thick, even 2.8 cm band all the way round
-    [-0.083, 0.014, 0.052, 0.020, 0.014, 0.014],
-    [-0.074, 0.030, 0.054, 0.030, 0.014, 0.014],
-    [-0.058, 0.044, 0.057, 0.036, 0.014, 0.014],
-    [-0.030, 0.050, 0.058, 0.038, 0.014, 0.014],
-    [0.020, 0.052, 0.060, 0.038, 0.014, 0.014],
-    [0.070, 0.052, 0.057, 0.036, 0.014, 0.014],
-    [0.120, 0.0505, 0.050, 0.033, 0.014, 0.014],
-    [0.135, 0.050, 0.044, 0.034, 0.014, 0.014],
-    [0.170, 0.0505, 0.043, 0.033, 0.014, 0.014], [0.200, 0.0485, 0.041, 0.031, 0.014, 0.014],
-    [0.224, 0.043, 0.038, 0.028, 0.014, 0.014], [0.241, 0.034, 0.034, 0.023, 0.014, 0.014],
-    [0.251, 0.022, 0.030, 0.016, 0.014, 0.014], [0.256, 0.010, 0.026, 0.009, 0.014, 0.014],
+  // The upper and the sole are lofted from rounded-rectangle (superellipse) cross-sections: flat,
+  // near-vertical sides and a flat underside with rounded edges (a boot, not a sausage on a plate),
+  // closing to a round toe and heel at the ends.
+  const footStations = [ // z, half width, top of the upper, squareness exponent
+    [-0.083, 0.016, 0.070, 2.0], [-0.076, 0.034, 0.084, 2.6], [-0.060, 0.047, 0.093, 4.0],
+    [-0.030, 0.0515, 0.097, 5.0], [0.020, 0.0525, 0.099, 5.0], [0.070, 0.0525, 0.094, 5.0],
+    [0.120, 0.0515, 0.085, 4.8], [0.135, 0.051, 0.080, 4.6],
+    [0.170, 0.0515, 0.077, 4.4], [0.200, 0.050, 0.073, 4.0],
+    [0.224, 0.045, 0.067, 2.9], [0.241, 0.036, 0.058, 2.5],
+    [0.251, 0.024, 0.047, 2.2], [0.256, 0.010, 0.036, 2.0],
   ];
+  const SOLE_TOP = 0.028;
+  const rr = (z, hw, y0, y1, n, grow = 0) => { // rounded-rectangle ring in the x/y plane at height z
+    const pts = [], seg = 16, hx = (hw + grow) * BUILD.boot, yc = (y0 + y1) / 2, hy = (y1 - y0) / 2;
+    for (let i = 0; i < seg; i++) {
+      const th = Math.PI / seg + (2 * Math.PI * i) / seg, c = Math.cos(th), sn = Math.sin(th);
+      pts.push(V(ank.x + Math.sign(c) * Math.pow(Math.abs(c), 2 / n) * hx, yc + Math.sign(sn) * Math.pow(Math.abs(sn), 2 / n) * hy, z));
+    }
+    return pts;
+  };
   const fw = footStations.map(([z]) => (z < 0.13 ? F : T));
-  const fRing = (z, hw, yc, hh, grow = 0) => frameRing(V(ank.x, yc, z), V(0, 0, 1), V(1, 0, 0), (hw + grow) * BUILD.boot, hh, 14, { phase: Math.PI / 14 });
-  B.loft(footStations.map(([z, hw, yc, hh]) => fRing(z, hw, yc, hh)), 'boot', fw, { capStart: true, capEnd: true });
-  B.loft(footStations.map(([z, hw, , , sy, sh]) => fRing(z, hw, sy, sh, 0.006)), 'bootSole', fw, { capStart: true, capEnd: true });
+  B.loft(footStations.map(([z, hw, top, n]) => rr(z, hw, SOLE_TOP - 0.006, top, n)), 'boot', fw, { capStart: true, capEnd: true });
+  B.loft(footStations.map(([z, hw, , n]) => rr(z, hw, 0, SOLE_TOP, Math.min(n + 1.0, 6), 0.004)), 'bootSole', fw, { capStart: true, capEnd: true });
 }
 
 // ------------------------------------------------------------------------- arms
