@@ -21,14 +21,14 @@
     "events": {}
   },
   "Walk": {
-    "duration": 1.18,
+    "duration": 1.12,
     "loop": true,
     "inPlaceSpeed": 1.15,
     "shots": [],
     "events": {}
   },
   "Walk_Jump": {
-    "duration": 1.47,
+    "duration": 1.44,
     "loop": false,
     "inPlaceSpeed": 1.15,
     "shots": [],
@@ -40,7 +40,7 @@
     "runPhaseEnd": 0
   },
   "Walk_Jump_Left": {
-    "duration": 1.47,
+    "duration": 1.44,
     "loop": false,
     "inPlaceSpeed": 1.15,
     "shots": [],

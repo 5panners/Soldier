@@ -121,15 +121,15 @@ function kneeAim(_pelvisYaw, side) {
 // ------------------------------------------------------------------ gaits
 export const GAITS = {
   walk: {
-    // relaxed patrol walk: ~102 steps/min, soft heel strikes, easy roll-off
-    T: 1.18, v: 1.15, stance: 0.62, heelRock: 0.14, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
+    // upright patrol walk: ~107 steps/min, near-straight stance leg, soft heel strikes, easy roll-off
+    T: 1.12, v: 1.15, stance: 0.62, heelRock: 0.14, heelOff: 0.40, zHS: 0.30, footX: 0.112, toeOut: deg(8),
     hsPitch: deg(10), toePitch: deg(32), heelRisePow: 1.7, lift: 0.06, liftSkew: 0.75, kickBack: -0.03,
     swingInset: 0.012, landVy: 0.06, pitchEase: 2.4, swingToe: deg(6),
     hips: (p) => ({
       // vertical: lowest just after heel strike (loading response), highest at mid-stance;
       // a touch of 1st harmonic keeps left/right steps from being mirror-perfect
       pos: V3(-0.011 * Math.cos(TAU * (p - 0.30)),
-        0.927 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
+        0.960 + 0.015 * Math.cos(2 * TAU * (p - 0.31)) + 0.003 * Math.cos(TAU * (p - 0.2)),
         -0.008 * Math.cos(2 * TAU * (p - 0.30))),
       yaw: deg(-4) + deg(3.5) * Math.cos(TAU * (p - 0.02)), roll: -deg(1.8) * Math.cos(TAU * (p - 0.24)),
       pitch: deg(2) + deg(1.2) * Math.cos(2 * TAU * (p - 0.08)),
@@ -193,7 +193,8 @@ function hipsReachBound(hipsPos, hipsQ, feet, soft = false) {
     const a = feet[s].pos;
     const dx = hipsPos.x + o.x - a.x, dz = hipsPos.z + o.z - a.z;
     const d2 = dx * dx + dz * dz;
-    const b = a.y - o.y + Math.sqrt(Math.max(0, LEG_R * LEG_R - d2));
+    const R = soft ? (LEG_UPPER + LEG_LOWER) * 0.9975 : LEG_R; // walks: knee within ~8 deg of straight
+    const b = a.y - o.y + Math.sqrt(Math.max(0, R * R - d2));
     bound = Math.min(bound, b + slack);
   }
   return bound;
@@ -224,25 +225,19 @@ function locomotion(name, g, upper, meta = {}) {
     // gait), which shows up as a stomp and a judder. Instead, fit a smooth low-harmonic curve to
     // that limit, lower it just enough that it never exceeds the limit, and follow the nominal
     // pelvis path wherever that is lower (soft minimum), so the pelvis dips and rises smoothly.
+    // The pelvis rides on the reach limit itself, so the stance leg is very nearly straight at
+    // heel strike and through mid-stance. Only the sharp V at each heel strike is rounded: the
+    // limit is smoothed, and just the excess it creates around the V is shaved off with a smooth
+    // dip (a little knee give during loading response).
     const bnd = rows.map((r) => hipsReachBound(r.h.pos, r.quat, r.feet, true));
-    const n = rows.length;
-    const fit = (arr, harm) => {
-      const mean = arr.reduce((a, b) => a + b, 0) / n;
-      return arr.map((_, i) => {
-        let y = mean;
-        for (const k of harm) {
-          let c = 0, sn = 0;
-          for (let j = 0; j < n; j++) { const a = (TAU * k * j) / n; c += arr[j] * Math.cos(a); sn += arr[j] * Math.sin(a); }
-          const a = (TAU * k * i) / n;
-          y += (2 / n) * (c * Math.cos(a) + sn * Math.sin(a));
-        }
-        return y;
-      });
-    };
-    const B = fit(bnd, [1, 2, 3, 4, 5, 6]);
-    const over = Math.max(0, ...B.map((y, i) => y - bnd[i]));
-    ys = rows.map((r, i) => smin(r.y, B[i] - over - 0.002, 0.008));
-    ys = periodicSmooth(ys, 1.5);
+    const bs = periodicSmooth(bnd, 3.0);
+    const ex = bs.map((y, i) => Math.max(0, y - bnd[i] + 0.0015));
+    const es = periodicSmooth(ex, 4.0);
+    let alpha = 1;
+    es.forEach((e, i) => { if (e > 1e-5) alpha = Math.max(alpha, ex[i] / e); });
+    const path = bs.map((y, i) => y - alpha * es[i]);
+    ys = rows.map((r, i) => smin(r.y, path[i], 0.004));
+    ys = periodicSmooth(ys, 1.0);
   } else {
     ys = rows.map((r) => Math.min(r.y, hipsReachBound(r.h.pos, r.quat, r.feet)));
     ys = periodicSmooth(ys, 1.5);
